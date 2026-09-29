@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.output/
+.wxt/
+dist/
+coverage/
+e2e/artifacts/
+*.log
+.DS_Store
+kavannah-testers-*.zip

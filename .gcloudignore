@@ -1,0 +1,18 @@
+# Upload filter for `gcloud run deploy --source` (Cloud Build). Mirrors .dockerignore.
+.git
+.gitignore
+node_modules
+**/node_modules
+.env
+.env.*
+!.env.example
+apps/extension/.output
+apps/extension/.wxt
+apps/extension/dist
+apps/server/dist
+e2e/artifacts
+coverage
+**/coverage
+*.log
+.DS_Store
+docs

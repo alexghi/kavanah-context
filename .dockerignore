@@ -1,0 +1,18 @@
+# Only what the server image needs is copied explicitly in the Dockerfile; this keeps the
+# build context small and, above all, keeps secrets and local artifacts out of it.
+.git
+node_modules
+**/node_modules
+.env
+.env.*
+!.env.example
+apps/extension/.output
+apps/extension/.wxt
+apps/extension/dist
+apps/server/dist
+e2e/artifacts
+coverage
+**/coverage
+*.log
+.DS_Store
+docs

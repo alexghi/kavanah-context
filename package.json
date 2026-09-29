@@ -1,0 +1,36 @@
+{
+  "name": "kavannah",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Kavannah: analyze potentially antisemitic or misleading posts on X and decide what constructive action to take.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n server,extension -c cyan,magenta \"npm:dev:server\" \"npm:dev:extension\"",
+    "dev:server": "npm run dev -w @kavannah/server",
+    "dev:extension": "npm run dev -w @kavannah/extension",
+    "build": "npm run build -w @kavannah/extension",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "analyze": "npm run analyze -w @kavannah/server --",
+    "serve": "npm run start -w @kavannah/server",
+    "tunnel": "ngrok http ${KAVANNAH_PORT:-8787}",
+    "serve:public": "concurrently -k -n server,ngrok -c cyan,green \"npm:serve\" \"npm:tunnel -- --log stdout --log-format term\"",
+    "keys": "node apps/server/scripts/access-key.mjs",
+    "bundle": "npm run bundle -w @kavannah/server",
+    "deploy": "deploy/cloudrun.sh deploy",
+    "e2e": "node e2e/run.mjs",
+    "package:testers": "scripts/package-testers.sh",
+    "screenshots:testers": "node docs/testers/screenshots.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.3"
+  }
+}
