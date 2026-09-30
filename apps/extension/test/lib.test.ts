@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { scoreBand } from "@kavannah/shared";
 import { antisemitismCategoryText, contentLabelText, hostOf, humanize, joinWords, verdictText } from "@/lib/labels";
+import { disinfoVerdict, engageVerdict, keySources, noteVerdict } from "@/lib/decisions";
 import { createPanelStore } from "@/lib/panelStore";
 import { detectHostTheme, isDarkColor, parseCssColor } from "@/lib/theme";
 import { formatDuration, stripUndefined } from "@/lib/utils";
@@ -18,6 +19,46 @@ describe("labels", () => {
     expect(joinWords(["a", "b", "c"])).toBe("a, b and c");
     expect(hostOf("https://www.lemonde.fr/x")).toBe("lemonde.fr");
     expect(scoreBand(78).label).toBe("Likely misleading");
+  });
+});
+
+describe("decision verdicts", () => {
+  const classify = (score: number, labels: ReturnType<typeof makeAnalysis>["classification"]["labels"]) => ({
+    ...makeAnalysis().classification,
+    disinformationScore: score,
+    labels,
+  });
+  const evidence = makeAnalysis().evidence;
+  const withVerdict = (verdict: (typeof evidence)[number]["verdict"]) => evidence.map((item) => ({ ...item, verdict }));
+
+  it("turns the classification into a one-glance disinformation verdict", () => {
+    expect(disinfoVerdict(classify(90, ["misinformation"]), evidence)).toEqual({ label: "Likely misleading", tone: "critical" });
+    expect(disinfoVerdict(classify(62, ["factual_claim", "misleading_framing"]), evidence)).toEqual({ label: "Missing context", tone: "caution" });
+    expect(disinfoVerdict(classify(62, ["misinformation", "misleading_framing"]), evidence).label).toBe("Potentially misleading");
+    expect(disinfoVerdict(classify(30, ["unverifiable_claim"]), evidence).label).toBe("Some concerns");
+    expect(disinfoVerdict(classify(5, ["opinion"]), [])).toEqual({ label: "Opinion", tone: "neutral" });
+    expect(disinfoVerdict(classify(2, ["factual_claim", "benign"]), withVerdict("supported"))).toEqual({ label: "Accurate", tone: "positive" });
+    // Nothing was checked, so "accurate" would overclaim.
+    expect(disinfoVerdict(classify(2, ["benign"]), [])).toEqual({ label: "No clear factual issue", tone: "neutral" });
+    expect(disinfoVerdict(classify(10, ["factual_claim"]), withVerdict("insufficient_evidence")).label).toBe("No clear factual issue");
+  });
+
+  it("words the two recommendations for the section headers", () => {
+    expect(engageVerdict("engage").label).toBe("Yes");
+    expect(engageVerdict("do_not_engage").label).toBe("No");
+    expect(noteVerdict("recommended")).toEqual({ label: "Recommended", tone: "positive" });
+    expect(noteVerdict("not_recommended").label).toBe("Not recommended");
+  });
+
+  it("picks at most three key sources, deduped, verified first", () => {
+    const source = (id: string, verified: boolean, url = `https://example.org/${id}`) => ({ ...evidence[0]!.sources[0]!, id, url, verified });
+    const items = [
+      { ...evidence[0]!, sources: [source("a", false), source("b", true)] },
+      { ...evidence[0]!, claimId: "c2", sources: [source("b2", true, "https://example.org/b"), source("c", true), source("d", true)] },
+    ];
+    expect(keySources(items).map((s) => s.id)).toEqual(["b", "c", "d"]);
+    expect(keySources(items, 5).map((s) => s.id)).toEqual(["b", "c", "d", "a"]);
+    expect(keySources([])).toEqual([]);
   });
 });
 

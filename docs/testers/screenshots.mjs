@@ -142,7 +142,7 @@ async function main() {
     await kButton.click();
     const dialog = page.getByRole("dialog", { name: "Kavannah" });
     log(MOCK ? "waiting for the mock analysis" : "waiting for a live analysis (1-3 min)…");
-    await dialog.getByText("Content assessment", { exact: true }).waitFor({ timeout: 240_000 });
+    await dialog.getByRole("heading", { name: /^Disinfo: / }).waitFor({ timeout: 240_000 });
     await sleep(800);
     await page.screenshot({ path: path.join(OUT, "06-result.png") });
     log("06 done");

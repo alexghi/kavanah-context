@@ -3,14 +3,11 @@ import { Check, Copy, RefreshCw, RotateCcw, TriangleAlert, X as XIcon } from "lu
 import type { DraftKind } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
 import { copyText } from "@/lib/clipboard";
-import { cn } from "@/lib/utils";
 import { SourceItem } from "./EvidenceList";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Skeleton } from "./ui/skeleton";
 import { Textarea } from "./ui/textarea";
-
-export const REPLY_MAX_CHARS = 280;
 
 export interface DraftEditorProps {
   kind: DraftKind;
@@ -132,9 +129,7 @@ function ReadyEditor({
   onReset(): void;
 }) {
   const { generated, text } = state;
-  const max = kind === "reply" ? REPLY_MAX_CHARS : undefined;
   const count = Array.from(text).length;
-  const over = max !== undefined && count > max;
   const dirty = text !== generated.text;
 
   return (
@@ -144,7 +139,6 @@ function ReadyEditor({
         value={text}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
-        aria-invalid={over || undefined}
         rows={4}
         className="bg-background"
       />
@@ -158,13 +152,9 @@ function ReadyEditor({
           <RotateCcw aria-hidden="true" />
           Reset to generated
         </Button>
-        {max !== undefined && (
-          <span
-            className={cn("ml-auto tabular-nums text-[12px]", over ? "font-medium text-critical" : "text-muted-foreground")}
-            aria-live="polite"
-            aria-label={`${count} of ${max} characters`}
-          >
-            {count} / {max}
+        {kind === "reply" && (
+          <span className="ml-auto tabular-nums text-[12px] text-muted-foreground" aria-live="polite">
+            {count} {count === 1 ? "character" : "characters"}
           </span>
         )}
       </div>

@@ -477,6 +477,14 @@ async function main() {
     await dialog.getByRole("heading", { name: resultHeading }).waitFor({ timeout: T.analysis });
   };
   const previewRegion = dialog.getByRole("region", { name: "Post being analyzed" });
+  // The three decisions are collapsed sections; the header button's name starts with "Disinfo:", "Engage:" or "Note:".
+  const sectionHeader = (label) => dialog.getByRole("button", { name: new RegExp(`^${label}: `) });
+  const openSection = async (label) => {
+    const header = sectionHeader(label);
+    await header.waitFor({ timeout: T.analysis });
+    if ((await header.getAttribute("aria-expanded")) !== "true") await header.click();
+    await waitUntil(async () => (await header.getAttribute("aria-expanded")) === "true", { message: `${label} section open`, timeout: T.short });
+  };
 
   await step(
     "01",
@@ -541,7 +549,7 @@ async function main() {
 
   await step(
     "02",
-    "click K on the hero post: loading state, then the analysis renders (both recommendations, Demo chip)",
+    "click K on the hero post: loading state, then the three collapsed verdicts render (Disinfo, Engage, Note, Demo chip)",
     async (entry) => {
       const clickedAt = Date.now();
       await kButton(hero).click();
@@ -562,28 +570,33 @@ async function main() {
         loading = { caught: false, note: "result arrived before the loading state could be observed" };
       }
 
-      await dialog.getByText("Content assessment", { exact: true }).waitFor({ timeout: T.analysis });
+      await dialog.getByRole("heading", { name: "Disinfo: Likely misleading" }).waitFor({ timeout: T.analysis });
       const renderedAfterMs = Date.now() - clickedAt;
 
-      const engageLabel = dialog.getByText(/^should i engage\?$/i);
-      const noteLabel = dialog.getByText(/^should i add a community note\?$/i);
-      await engageLabel.waitFor({ timeout: T.short });
-      await noteLabel.waitFor({ timeout: T.short });
-      await dialog.getByRole("heading", { name: "Don't engage" }).waitFor({ timeout: T.short });
-      await dialog.getByRole("heading", { name: "Community Note recommended" }).waitFor({ timeout: T.short });
+      // All three verdicts are readable without expanding anything.
+      await dialog.getByRole("heading", { name: "Engage: No" }).waitFor({ timeout: T.short });
+      await dialog.getByRole("heading", { name: "Note: Recommended" }).waitFor({ timeout: T.short });
+      await dialog.getByText("Confidence: high", { exact: true }).waitFor({ timeout: T.short });
       await dialog.getByText("Demo", { exact: true }).waitFor({ timeout: T.short });
+      await dialog.getByText(`Demo fixture: ${HERO_FIXTURE}`).waitFor({ timeout: T.short });
+      for (const label of ["Disinfo", "Engage", "Note"]) {
+        assert.equal(await sectionHeader(label).getAttribute("aria-expanded"), "false", `${label} section starts collapsed`);
+      }
+      assert.equal(await dialog.getByRole("textbox").count(), 0, "no draft is visible while the sections are collapsed");
+      await snap(dialog, "03a-panel-collapsed.png", entry);
+
+      // The section labels are rendered uppercase (CSS text-transform).
+      const engageLabel = dialog.getByText(/^engage$/i);
+      const rendered = await engageLabel.evaluate((el) => ({ innerText: el.innerText, transform: getComputedStyle(el).textTransform }));
+      assert.equal(rendered.innerText, "ENGAGE");
+      assert.equal(rendered.transform, "uppercase");
+
+      // Details live inside the Disinfo section.
+      await openSection("Disinfo");
       await dialog.getByRole("heading", { name: "False claim in an antisemitic conspiracy frame" }).waitFor({ timeout: T.short });
       await dialog.getByText("90 / 100").waitFor({ timeout: T.short });
-      await dialog.getByText("Likely misleading", { exact: true }).waitFor({ timeout: T.short });
-      await dialog.getByText(`Demo fixture: ${HERO_FIXTURE}`).waitFor({ timeout: T.short });
+      await dialog.getByText("Key sources", { exact: true }).waitFor({ timeout: T.short });
       await dialog.getByText("Demo output from a built-in fixture, not a live analysis.").waitFor({ timeout: T.short });
-
-      // The section labels are rendered uppercase (CSS text-transform), as the brief's texts read.
-      const rendered = await engageLabel.evaluate((el) => ({ innerText: el.innerText, transform: getComputedStyle(el).textTransform }));
-      assert.equal(rendered.innerText, "SHOULD I ENGAGE?");
-      assert.equal(rendered.transform, "uppercase");
-      const noteRendered = await noteLabel.evaluate((el) => el.innerText);
-      assert.equal(noteRendered, "SHOULD I ADD A COMMUNITY NOTE?");
 
       const preview = (await previewRegion.innerText()).replace(/\s+/g, " ");
       assert.match(preview, /Awake Finance/);
@@ -608,16 +621,19 @@ async function main() {
 
   await step(
     "03",
-    "View evidence: claims with verdicts, sources with publisher/title/Open source links",
+    "View evidence: claims with verdicts, sources whose publisher/title is the link",
     async (entry) => {
+      await openSection("Disinfo");
       const toggle = dialog.getByRole("button", { name: /View evidence/ });
       const toggleText = (await toggle.innerText()).replace(/\s+/g, " ").trim();
       assert.match(toggleText, /\(2 claims\)/, `evidence toggle text: ${toggleText}`);
       await toggle.click();
       await dialog.getByRole("button", { name: /Hide evidence/ }).waitFor({ timeout: T.short });
 
-      const sourceLinks = dialog.getByRole("link", { name: /Open source/ });
-      await waitUntil(async () => (await sourceLinks.count()) >= 2, { message: ">= 2 'Open source' links", timeout: T.short });
+      const sourceLinks = dialog.getByRole("link", { name: /opens in a new tab/ });
+      await waitUntil(async () => (await sourceLinks.count()) >= 2, { message: ">= 2 inline source links", timeout: T.short });
+      assert.equal(await dialog.getByText("Open source").count(), 0, "no separate 'Open source' button");
+      assert.match(await sourceLinks.first().innerText(), /\S+\.\S+ .+/, "the link text is the publisher and title");
       const hrefs = await sourceLinks.evaluateAll((links) => links.map((a) => ({ href: a.href, target: a.target, rel: a.rel })));
       assert.ok(hrefs.some((l) => l.href === HERO_SOURCE_URL), `expected ${HERO_SOURCE_URL} among ${JSON.stringify(hrefs)}`);
       assert.ok(hrefs.every((l) => l.href.startsWith("http") && l.target === "_blank" && /noopener/.test(l.rel)), "source links open safely in a new tab");
@@ -641,11 +657,10 @@ async function main() {
   let noteDraftText = null;
   await step(
     "04",
-    "Prepare Community Note: draft with a source URL, edit it, Copy puts the edited text on the clipboard",
+    "Open the Note section: the recommended draft appears with a source URL, edit it, Copy puts the edited text on the clipboard",
     async (entry) => {
-      const prepare = dialog.getByRole("button", { name: "Prepare Community Note" });
-      await prepare.scrollIntoViewIfNeeded();
-      await prepare.click();
+      // The note is recommended, so opening its section generates the draft without a further click.
+      await openSection("Note");
       const box = dialog.getByRole("textbox", { name: "Community Note draft" });
       await box.waitFor({ timeout: T.analysis });
       const generated = await waitUntil(async () => ((await box.inputValue()).trim() ? box.inputValue() : null), { message: "non-empty Community Note draft", timeout: T.analysis });
@@ -690,6 +705,7 @@ async function main() {
     "05",
     "Request a Community Note: X's ••• menu opens, the item is highlighted but never clicked, Escape closes it",
     async (entry) => {
+      await openSection("Note");
       const request = dialog.getByRole("button", { name: "Request a Community Note" });
       await request.scrollIntoViewIfNeeded();
       const urlBefore = page.url();
@@ -730,7 +746,7 @@ async function main() {
       const panelOpenAfterEscape = await isPanelOpen();
       if (!panelOpenAfterEscape) {
         observe("Escape pressed while X's ••• menu is open closes the menu AND the Kavannah drawer at once (the drawer closes on Esc from anywhere on the page); the drawer has to be reopened with K, its analysis and drafts are kept.");
-        await openPanelFor(hero, "Don't engage");
+        await openPanelFor(hero, "Engage: No");
         assert.ok(await dialog.getByRole("textbox", { name: "Community Note draft" }).count(), "note draft still there after reopening");
       }
       return { menuOpens: fake.opens, itemStyle, hintGapPx, panelOpenAfterEscape, item: (await item.count()) ? "still present" : "removed" };
@@ -740,23 +756,29 @@ async function main() {
 
   await step(
     "06",
-    "Prepare reply: reply draft with a 'n / 280' counter",
+    "Prepare reply: reply draft with a character count and no 280 limit",
     async (entry) => {
-      if (!(await isPanelOpen())) await openPanelFor(hero, "Don't engage");
+      if (!(await isPanelOpen())) await openPanelFor(hero, "Engage: No");
+      await openSection("Engage");
+      // "Don't engage" here, so the reply stays on demand.
       const prepare = dialog.getByRole("button", { name: "Prepare reply" });
       await prepare.scrollIntoViewIfNeeded();
       await prepare.click();
       const box = dialog.getByRole("textbox", { name: "Reply draft" });
       await box.waitFor({ timeout: T.analysis });
       const text = await waitUntil(async () => ((await box.inputValue()).trim() ? box.inputValue() : null), { message: "non-empty reply draft", timeout: T.analysis });
-      const counter = dialog.locator('[aria-label$="of 280 characters"]');
+      const counter = dialog.getByText(/^\d+ characters?$/);
       await counter.waitFor({ timeout: T.short });
       const counterText = (await counter.innerText()).replace(/\s+/g, " ").trim();
-      const m = counterText.match(/^(\d+) \/ 280$/);
-      assert.ok(m, `counter reads "${counterText}"`);
-      const count = Number(m[1]);
-      assert.ok(count <= 280, `reply draft is ${count} chars (> 280)`);
+      const count = Number(counterText.match(/^(\d+)/)[1]);
       assert.equal(count, Array.from(text).length, "counter matches the draft length");
+      assert.equal(await dialog.getByText(/\/ 280/).count(), 0, "no 280-character limit is shown");
+      // A long reply is accepted as is: no limit, no error state.
+      const longReply = `${text} ${"More context. ".repeat(30)}`.trim();
+      await box.fill(longReply);
+      await waitUntil(async () => (await counter.innerText()).startsWith(String(Array.from(longReply).length)), { message: "counter follows a long reply", timeout: T.short });
+      assert.equal(await box.getAttribute("aria-invalid"), null, "a reply over 280 characters is not flagged");
+      await box.fill(text);
       await box.scrollIntoViewIfNeeded();
       await sleep(150);
       await snap(dialog, "07-reply-draft.png", entry);
@@ -767,19 +789,23 @@ async function main() {
 
   await step(
     "07",
-    "Close the panel with × and with Esc; K on the benign post gives two 'not recommended' cards",
+    "Close the panel with × and with Esc; K on the benign post gives 'Engage: No' and 'Note: Not recommended'",
     async (entry) => {
-      if (!(await isPanelOpen())) await openPanelFor(hero, "Don't engage");
+      if (!(await isPanelOpen())) await openPanelFor(hero, "Engage: No");
       await dialog.getByRole("button", { name: "Close Kavannah panel" }).click();
       await waitUntil(isPanelHidden, { message: "panel hidden after ×", timeout: T.short });
 
-      await openPanelFor(hero, "Don't engage"); // result comes back instantly (kept in memory)
+      await openPanelFor(hero, "Engage: No"); // result comes back instantly (kept in memory)
       await page.keyboard.press("Escape");
       await waitUntil(isPanelHidden, { message: "panel hidden after Esc", timeout: T.short });
 
       await benign.scrollIntoViewIfNeeded();
-      await openPanelFor(benign, "Community Note not recommended");
-      await dialog.getByRole("heading", { name: "Don't engage" }).waitFor({ timeout: T.short });
+      await openPanelFor(benign, "Note: Not recommended");
+      await dialog.getByRole("heading", { name: "Engage: No" }).waitFor({ timeout: T.short });
+      for (const label of ["Disinfo", "Engage", "Note"]) {
+        assert.equal(await sectionHeader(label).getAttribute("aria-expanded"), "false", `${label} section is collapsed again for a new post`);
+        await openSection(label);
+      }
       await dialog.getByRole("heading", { name: "No clear factual issue identified" }).waitFor({ timeout: T.short });
       await dialog.getByText(`Demo fixture: ${BENIGN_FIXTURE}`).waitFor({ timeout: T.short });
       await dialog.getByText("2 / 100").waitFor({ timeout: T.short });
@@ -792,7 +818,7 @@ async function main() {
       assert.equal(engageDesc, 1);
       assert.equal(noteDesc, 1);
       await snap(dialog, "08-benign.png", entry);
-      return { engage: "Don't engage", communityNote: "Community Note not recommended" };
+      return { engage: "Engage: No", communityNote: "Note: Not recommended" };
     },
     { page },
   );
@@ -812,7 +838,7 @@ async function main() {
       assert.match(preview, /M\. K\., history teacher/);
       assert.match(preview, /@history_teacher_mk/);
       await dialog.getByText(`Demo fixture: ${QUOTE_FIXTURE}`).waitFor({ timeout: T.analysis });
-      await dialog.getByRole("heading", { name: "Community Note not recommended" }).waitFor({ timeout: T.short });
+      await dialog.getByRole("heading", { name: "Note: Not recommended" }).waitFor({ timeout: T.short });
       await snap(dialog, "08b-quote-post.png", entry);
       return { fixture: QUOTE_FIXTURE };
     },
@@ -836,8 +862,8 @@ async function main() {
       }, { message: `${fixtures.length} demo posts listed`, timeout: T.medium });
       await snap(popup, "09a-popup-picker.png", entry);
       await popup.getByRole("button", { name: /Viral conspiracy post/ }).click();
-      await popup.getByRole("heading", { name: "Community Note recommended" }).waitFor({ timeout: T.analysis });
-      await popup.getByRole("heading", { name: "Don't engage" }).waitFor({ timeout: T.short });
+      await popup.getByRole("heading", { name: "Note: Recommended" }).waitFor({ timeout: T.analysis });
+      await popup.getByRole("heading", { name: "Engage: No" }).waitFor({ timeout: T.short });
       await popup.getByText("Demo", { exact: true }).waitFor({ timeout: T.short });
       await popup.getByRole("button", { name: /All demo posts/ }).waitFor({ timeout: T.short });
       const overflow = await popup.evaluate(() => ({ docScrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth }));
@@ -858,12 +884,12 @@ async function main() {
     "dark mode: emulate prefers-color-scheme dark with the panel open; also the drawer on a light X page",
     async (entry) => {
       await page.bringToFront();
-      if (!(await isPanelOpen())) await openPanelFor(hero, "Don't engage");
+      if (!(await isPanelOpen())) await openPanelFor(hero, "Engage: No");
       else {
         await page.keyboard.press("Escape");
         await waitUntil(isPanelHidden, { message: "panel hidden", timeout: T.short });
         await hero.scrollIntoViewIfNeeded();
-        await openPanelFor(hero, "Don't engage");
+        await openPanelFor(hero, "Engage: No");
       }
       await page.emulateMedia({ colorScheme: "dark" });
       await sleep(200);
@@ -877,7 +903,7 @@ async function main() {
       await page.keyboard.press("Escape");
       await waitUntil(isPanelHidden, { message: "panel hidden", timeout: T.short });
       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-      await openPanelFor(hero, "Don't engage");
+      await openPanelFor(hero, "Engage: No");
       const light = await panelState();
       assert.equal(light.theme, "light", "drawer detects the light host page");
       assert.equal(light.background, "rgb(255, 255, 255)", `light drawer background: ${light.background}`);

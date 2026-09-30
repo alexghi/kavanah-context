@@ -17,8 +17,17 @@ export function SourceItem({ source, compact = false }: { source: Source; compac
   return (
     <li className={cn("leading-5", compact ? "text-[12px]" : "text-[12.5px]")}>
       <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-        <span className="font-semibold text-foreground">{source.publisher ?? hostOf(source.url)}</span>
-        <span className="text-foreground/90">{source.title}</span>
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="rounded-sm underline decoration-border underline-offset-2 hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="font-semibold text-foreground">{source.publisher ?? hostOf(source.url)}</span>{" "}
+          <span className="text-foreground/90">{source.title}</span>
+          <ExternalLink className="ml-1 inline size-3 align-[-1px] text-muted-foreground" aria-hidden="true" />
+          <span className="sr-only-text">(opens in a new tab)</span>
+        </a>
         {source.verified === false && (
           <Badge variant="caution" title="Kavannah could not confirm that this link resolves">
             <TriangleAlert aria-hidden="true" />
@@ -31,16 +40,6 @@ export function SourceItem({ source, compact = false }: { source: Source; compac
           <span className="font-medium text-foreground/80">Why it matters:</span> {source.whyItMatters}
         </p>
       )}
-      <a
-        href={source.url}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="inline-flex items-center gap-1 rounded-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Open source
-        <ExternalLink className="size-3" aria-hidden="true" />
-        <span className="sr-only-text">(opens in a new tab)</span>
-      </a>
     </li>
   );
 }
