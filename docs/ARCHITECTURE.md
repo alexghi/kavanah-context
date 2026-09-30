@@ -44,6 +44,7 @@ docs/             this file, plus notes
 | Two recommendations | "Should I engage?" and "Should I add a Community Note?" are produced by **separate** prompt stages and rendered as **equal** cards. | Core product principle. |
 | Drafts | Generated on demand (`POST /api/draft`), editable, copy-only. Nothing is ever posted. | User stays in control; faster first analysis. |
 | Explanations and contrast (decided 2026-09-30) | Every label, score band, antisemitism level and category, confidence level and evidence verdict is explained where it appears, from one shared source (`packages/shared/src/explain.ts`, worded to match the prompts). Labels are split into *What was found* (coloured, with an icon) and *Kind of post* (outlined, not a judgement). "How to read this analysis" lists everything. All text meets WCAG AA in both themes; the e2e contrast audit (`e2e/contrast.mjs`) checks every visible text in all ten demo analyses. | Testers and judges must understand each tag without prior knowledge; colour never carries meaning alone. |
+| Manipulation layer (decided 2026-09-30) | The classification call also names the manipulation techniques the post uses (15 techniques in four families: emotional and social pressure, distorted evidence, distorted reasoning, blame narratives), each with the post's own words as the trigger, an explanation and a confidence, plus a level (none / present / central). Judged separately from truth. Shown as its own section with definitions; fed to both recommendations and the drafts, so a note can state the missing piece ("the comparison starts at the 2016 El Niño peak"). | The brief's "information-manipulation analysis"; a true post can manipulate and a false one can argue fairly, and readers need the mechanism named to see it. No extra latency: it rides on the existing call. |
 | Mock mode | `KAVANNAH_MOCK=1` (or extension setting) serves 10 hand-written fixtures covering the brief's scenarios; matched by text similarity. | Demo without a key or quota. |
 
 ## Analysis pipeline (server)
@@ -51,8 +52,8 @@ docs/             this file, plus notes
 ```
 PostContext
   ├─ stage 1  extractClaims      (structured)   claims + types + check-worthiness
-  ├─ stage 2  classifyContent    (structured)   labels, antisemitism assessment (IHRA categories),
-  │                                              disinformation score, confidence            [runs in parallel with 1]
+  ├─ stage 2  classifyContent    (structured)   labels, antisemitism screening (IHRA patterns), manipulation
+  │                                              techniques, disinformation score, confidence [runs in parallel with 1]
   ├─ stage 3  retrieveEvidence   (web_search)   candidate sources for check-worthy claims (skipped if none)
   ├─ stage 4  assessEvidence     (structured)   per-claim verdict; sources chosen by id from stage 3 only
   ├─ stage 5a recommendEngagement(structured)   engage / do_not_engage / uncertain + rationale   ┐ parallel,

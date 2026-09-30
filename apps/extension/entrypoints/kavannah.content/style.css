@@ -232,6 +232,58 @@
   color: var(--muted-foreground);
 }
 
+/*
+ * Motion. Content settles in where its placeholder was (no jump), a part that has just arrived
+ * "breathes" twice (a soft glow that swells and fades), and waiting placeholders breathe slowly.
+ * All of it is off under prefers-reduced-motion.
+ */
+@keyframes kavannah-breathe {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent);
+  }
+  40% {
+    box-shadow:
+      0 0 0 5px color-mix(in srgb, var(--primary) 26%, transparent),
+      0 0 22px 0 color-mix(in srgb, var(--primary) 22%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 0%, transparent);
+  }
+}
+@keyframes kavannah-settle {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes kavannah-skeleton {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@utility kavannah-breathe {
+  animation: kavannah-breathe 1.9s ease-in-out 2;
+}
+@utility kavannah-settle {
+  animation: kavannah-settle 480ms ease-out both;
+}
+@utility kavannah-skeleton {
+  animation: kavannah-skeleton 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .kavannah-breathe,
+  .kavannah-settle,
+  .kavannah-skeleton {
+    animation: none;
+  }
+}
+
 @utility sr-only-text {
   position: absolute;
   width: 1px;

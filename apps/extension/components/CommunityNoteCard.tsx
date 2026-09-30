@@ -8,10 +8,11 @@ import {
   type CommunityNote,
 } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
+import { useArrival } from "@/hooks/useArrival";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 import { cn } from "@/lib/utils";
 import { DraftEditor } from "./DraftEditor";
-import { NOTE_STATUS, StatusMark } from "./RecommendationStatus";
+import { NOTE_STATUS, RecommendationSkeleton, StatusMark } from "./RecommendationStatus";
 import { SectionLabel } from "./SectionLabel";
 import { GroupTitle } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -26,7 +27,9 @@ export type NoteRequestState =
   | CommunityNoteMenuStatus;
 
 export interface CommunityNoteCardProps {
-  communityNote: CommunityNote;
+  /** null while the analysis is still running: the card keeps its place with a placeholder. */
+  communityNote: CommunityNote | null;
+  pendingText?: string;
   draft: DraftState;
   request: NoteRequestState;
   onPrepare(): void;
@@ -80,6 +83,7 @@ function RequestFeedback({ request }: { request: NoteRequestState }) {
 
 export function CommunityNoteCard({
   communityNote,
+  pendingText,
   draft,
   request,
   onPrepare,
@@ -91,13 +95,15 @@ export function CommunityNoteCard({
   onCloseDraft,
 }: CommunityNoteCardProps) {
   const [guideOpen, setGuideOpen] = useState(false);
+  const arrived = useArrival(communityNote !== null);
+  if (!communityNote) return <RecommendationSkeleton question="Should I add a Community Note?" text={pendingText ?? "Deciding once the evidence is in…"} />;
   const recommendation = communityNote.recommendation;
   const copy = COMMUNITY_NOTE_COPY[recommendation];
   const working = request.status === "working";
 
   return (
-    <Card aria-labelledby="kavannah-note-title">
-      <CardHeader className="pb-3">
+    <Card aria-labelledby="kavannah-note-title" className={cn(arrived && "kavannah-breathe")}>
+      <CardHeader className="kavannah-settle pb-3">
         <SectionLabel>Should I add a Community Note?</SectionLabel>
         <div className="flex items-center gap-2.5">
           <StatusMark status={NOTE_STATUS[recommendation]} />
@@ -107,7 +113,7 @@ export function CommunityNoteCard({
         </div>
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="kavannah-settle space-y-3">
         <div className="border-t border-border pt-3">
           <GroupTitle>Why</GroupTitle>
           <p className="mt-0.5 text-[13px] leading-5 text-foreground">{communityNote.rationale}</p>

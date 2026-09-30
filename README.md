@@ -1,8 +1,8 @@
 # Kavannah
 
 A Chrome extension for X that helps you decide what to do about a post that may be misleading or antisemitic.
-Click the **K** in a post's action bar and Kavannah shows what is potentially problematic, the evidence, and two
-**independent** recommendations:
+Click the **K** in a post's action bar and Kavannah shows what is potentially problematic, how the post persuades
+(the manipulation techniques it uses, quoted from its own words), the evidence, and two **independent** recommendations:
 
 - **Should I engage?** — engage / don't engage / uncertain, with a rationale and an editable reply draft.
 - **Should I add a Community Note?** — recommended / not recommended / uncertain, with a rationale, an editable
@@ -117,7 +117,7 @@ x.com page ── content script ── background worker ── POST /api/analy
 ```
 
 - `packages/shared` — Zod schemas and types shared by both sides (single source of truth), product copy, the
-  Community Notes guidance digest.
+  Community Notes guidance digest, and the plain-language definitions of every label, technique, level and verdict.
 - `apps/server` — Express API, provider abstraction (`lib/ai`), source retrieval + URL verification
   (`lib/sources`), prompt stages (`lib/analysis`), demo fixtures (`mock`), CLI.
 - `apps/extension` — WXT + React + Tailwind: content script (K button, DOM extraction, in-page panel),

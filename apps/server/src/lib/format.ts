@@ -42,6 +42,13 @@ export function formatAnalysis(analysis: AnalyzePostResponse): string {
   const patterns = c.antisemitism.patterns?.length ? c.antisemitism.patterns : c.antisemitism.categories;
   out.push(`Antisemitism:  ${c.antisemitism.assessment}${patterns.length ? ` [${patterns.join(", ")}]` : ""}`);
   out.push(wrap(c.antisemitism.explanation, "               "));
+  if (c.manipulation) {
+    out.push(`Manipulation:  ${c.manipulation.level}${c.manipulation.summary ? ` — ${c.manipulation.summary}` : ""}`);
+    for (const f of c.manipulation.findings) {
+      out.push(`  - ${f.technique} (${f.confidence}): “${f.trigger}”`);
+      out.push(wrap(f.explanation, "      "));
+    }
+  }
   out.push("Explanation:");
   out.push(wrap(c.explanation, "  "));
   out.push("");

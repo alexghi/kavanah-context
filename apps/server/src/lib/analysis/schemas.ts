@@ -41,6 +41,19 @@ export const ClassificationOutputSchema = z.object({
     /** true = run the full IHRA review (the post touches Jews, Israel, Zionism, the Holocaust, Nazism or tropes) */
     needsIhraReview: z.boolean(),
   }),
+  /** Information-manipulation analysis. `technique` and `confidence` are strings here (grammar size); normalized in code. */
+  manipulation: z.object({
+    level: z.enum(["none", "present", "central"]),
+    summary: z.string(),
+    findings: z.array(
+      z.object({
+        technique: z.string(),
+        trigger: z.string(),
+        explanation: z.string(),
+        confidence: z.string(),
+      }),
+    ),
+  }),
 });
 export type ClassificationOutput = z.infer<typeof ClassificationOutputSchema>;
 

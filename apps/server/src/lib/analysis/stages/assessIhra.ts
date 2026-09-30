@@ -17,6 +17,7 @@ import {
   type StatementBasis,
 } from "@kavannah/shared";
 import type { CandidateSource, ModelProvider, ModelResult } from "../../ai/provider.js";
+import { enumValue } from "../enums.js";
 import { assessIhraPrompt, compareAnalogyPrompt } from "../prompts.js";
 import { AnalogyRowsOutputSchema, IhraOutputSchema, type AnalogyRowsOutput, type IhraOutput } from "../schemas.js";
 
@@ -64,11 +65,6 @@ export function compareAnalogy(
 
 const clean = (items: string[]) => items.map((s) => s.trim()).filter(Boolean);
 
-/** "Nazi Comparison" / "NAZI_COMPARISON" / "nazi-comparison" → "nazi_comparison"; null when not a known value. */
-function enumValue<T extends string>(options: readonly T[], raw: string): T | null {
-  const key = raw.trim().toLowerCase().replace(/[\s-]+/g, "_");
-  return (options as readonly string[]).includes(key) ? (key as T) : null;
-}
 const patternOf = (raw: string): IhraPattern | null => enumValue(IhraPatternSchema.options, raw);
 const dimensionOf = (raw: string): ComparisonDimension | null => enumValue(ComparisonDimensionSchema.options, raw);
 const mechanismOf = (raw: string): AnalogyMechanism | null => enumValue(AnalogyMechanismSchema.options, raw);

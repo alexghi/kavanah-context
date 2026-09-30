@@ -50,6 +50,8 @@ recommendations with drafts you can edit and copy.
 
 ## Good to know
 
+- The **Manipulation** section shows how the post persuades: each technique is named, with the post's own words
+  that carry it. It is judged separately from whether the post is true.
 - Every label, score and verdict is explained where it appears. The **?** icon at the top of the panel opens
   *How to read this analysis*, which lists all of them.
 - Nothing is ever posted or submitted for you. Drafts are copy-only. "Request a Community Note" only
