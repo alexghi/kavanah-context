@@ -11,6 +11,11 @@ export const SettingsSchema = z.object({
   /** Preferred source domains, e.g. ["lemonde.fr", "ihra.org"]. Influence only, never override evidence. */
   trustedDomains: z.array(z.string()).default([]),
   language: z.string().optional(),
+  /**
+   * After filling X's "Request Community Note" form with the drafted note, also press X's
+   * "Agree & Request a note" button. Off by default: the user reviews and sends the request.
+   */
+  autoSendCommunityNote: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

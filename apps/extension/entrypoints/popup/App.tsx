@@ -106,9 +106,9 @@ export function App() {
 
   if (tab.status === "post") {
     const { post, tabId, demo } = tab;
-    const requestNote = async (): Promise<CommunityNoteMenuStatus> => {
+    const requestNote = async (_post: PostContext, explanation?: string): Promise<CommunityNoteMenuStatus> => {
       if (tabId === null) return { status: "not_offered", reason: "no_article" };
-      const response = await requestCommunityNoteInTab(tabId);
+      const response = await requestCommunityNoteInTab(tabId, explanation);
       if (!response.ok) throw new Error(response.error.message);
       return response.data;
     };

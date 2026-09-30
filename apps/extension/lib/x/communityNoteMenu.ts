@@ -1,16 +1,28 @@
-import { X_MENU_ITEMS } from "@kavannah/shared";
+import { X_MENU_ITEMS, X_NOTE_REQUEST_FORM } from "@kavannah/shared";
 import { isInsideQuote } from "./extractPost";
 
 /**
- * "Request a Community Note": open the post's ••• menu and point at X's own menu item.
- * Kavannah never clicks the item and never submits anything.
+ * "Request a Community Note": open the post's ••• menu and find X's own menu item.
+ * - With a drafted note: click "Request Community Note", wait for X's request form and put the
+ *   draft in its "Explain?" field. The request is only sent when the user turned on
+ *   "Send the request automatically" in the settings; otherwise they press X's button themselves.
+ * - Without one (or for a contributor's "Write a Community Note"): highlight the item, click nothing.
  */
 
 export type CommunityNoteMenuItem = "request" | "write";
 
 export type CommunityNoteMenuStatus =
   | { status: "highlighted"; item: CommunityNoteMenuItem; label: string }
-  | { status: "not_offered"; reason: "no_article" | "no_caret" | "no_menu" | "no_item" };
+  /** X's request form is open with the explanation filled in; `submitted` says whether X's button was pressed too. */
+  | { status: "filled"; submitted: boolean; truncated: boolean }
+  | { status: "not_offered"; reason: "no_article" | "no_caret" | "no_menu" | "no_item" | "no_form" };
+
+export interface CommunityNoteFill {
+  /** Text for the form's "Explain?" field (the drafted Community Note). */
+  explanation: string;
+  /** Also press X's "Agree & Request a note" button. @default false */
+  submit?: boolean;
+}
 
 export const MENU_HINT_ID = "kavannah-menu-hint";
 export const MENU_HINT_TEXT = "Kavannah: choose this to continue";
@@ -22,23 +34,80 @@ export interface RequestCommunityNoteOptions {
   timeoutMs?: number;
   /** Remove the highlight after this delay even if the menu stays open. @default 15000 */
   highlightMs?: number;
+  /** Open X's request form and fill it instead of only highlighting the menu item. */
+  fill?: CommunityNoteFill;
+  /** How long to wait for X's request form after clicking the menu item. @default 6000 */
+  formTimeoutMs?: number;
 }
 
+/** The first Community Note item in the menu; with `prefer`, that kind wins wherever it sits. */
 export function findCommunityNoteMenuItem(
   menu: ParentNode,
+  prefer?: CommunityNoteMenuItem,
 ): { element: HTMLElement; item: CommunityNoteMenuItem; label: string } | null {
   const wanted: Array<[CommunityNoteMenuItem, string]> = [
     ["request", X_MENU_ITEMS.request.toLowerCase()],
     ["write", X_MENU_ITEMS.write.toLowerCase()],
   ];
+  let first: { element: HTMLElement; item: CommunityNoteMenuItem; label: string } | null = null;
   for (const element of Array.from(menu.querySelectorAll<HTMLElement>('[role="menuitem"]'))) {
     const label = (element.textContent ?? "").replace(/\s+/g, " ").trim();
     const lower = label.toLowerCase();
     for (const [item, needle] of wanted) {
-      if (lower.includes(needle)) return { element, item, label };
+      if (!lower.includes(needle)) continue;
+      if (!prefer || item === prefer) return { element, item, label };
+      first ??= { element, item, label };
     }
   }
-  return null;
+  return first;
+}
+
+/** Set a field's value the way typing would, so X's React form state picks it up. */
+export function setFieldValue(field: HTMLTextAreaElement | HTMLInputElement, value: string): void {
+  const view = field.ownerDocument.defaultView ?? window;
+  const proto = field.tagName === "TEXTAREA" ? view.HTMLTextAreaElement.prototype : view.HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  if (setter) setter.call(field, value);
+  else field.value = value;
+  field.dispatchEvent(new view.Event("input", { bubbles: true }));
+  field.dispatchEvent(new view.Event("change", { bubbles: true }));
+}
+
+function findExplanationField(doc: Document): HTMLTextAreaElement | null {
+  return doc.querySelector<HTMLTextAreaElement>(`textarea[name="${X_NOTE_REQUEST_FORM.explanationField}"]`);
+}
+
+/** X's "Agree & Request a note" button in the same dialog as the explanation field. */
+export function findRequestSubmitButton(field: HTMLElement): HTMLElement | null {
+  const scope = field.closest('[role="dialog"]') ?? field.ownerDocument;
+  const needle = X_NOTE_REQUEST_FORM.submitLabel.toLowerCase();
+  return (
+    Array.from(scope.querySelectorAll<HTMLElement>('button, [role="button"]')).find((button) =>
+      (button.textContent ?? "").replace(/\s+/g, " ").toLowerCase().includes(needle),
+    ) ?? null
+  );
+}
+
+/** Wait for X's request form, fill its "Explain?" field and, if asked, press X's submit button. */
+async function fillRequestForm(doc: Document, fill: CommunityNoteFill, timeoutMs: number): Promise<CommunityNoteMenuStatus> {
+  const field = await waitFor(doc, () => findExplanationField(doc), timeoutMs);
+  if (!field) return { status: "not_offered", reason: "no_form" };
+
+  const max = field.maxLength > 0 ? field.maxLength : Infinity;
+  const text = fill.explanation.trim();
+  const truncated = text.length > max;
+  setFieldValue(field, truncated ? text.slice(0, max) : text);
+  field.focus({ preventScroll: true });
+  if (!fill.submit) return { status: "filled", submitted: false, truncated };
+
+  const button = findRequestSubmitButton(field);
+  if (!button || (button as HTMLButtonElement).disabled || button.getAttribute("aria-disabled") === "true") {
+    return { status: "filled", submitted: false, truncated };
+  }
+  button.click();
+  // X closes the form once the request is accepted; if it stays, the user finishes by hand.
+  const closed = await waitFor(doc, () => (doc.contains(field) ? null : true), timeoutMs);
+  return { status: "filled", submitted: closed === true, truncated };
 }
 
 function waitFor<T>(doc: Document, probe: () => T | null, timeoutMs: number): Promise<T | null> {
@@ -153,8 +222,9 @@ function highlight(item: HTMLElement, doc: Document, highlightMs: number): void 
 }
 
 /**
- * Scroll the article into view, click its ••• caret, wait (<= timeoutMs) for X's menu, and
- * highlight the "Request Community Note" / "Write a Community Note" item. The item is never clicked.
+ * Scroll the article into view, click its ••• caret and wait (<= timeoutMs) for X's menu. With
+ * `options.fill` and a "Request Community Note" item: click it and fill X's request form.
+ * Otherwise highlight the "Request Community Note" / "Write a Community Note" item without clicking it.
  */
 export async function requestCommunityNote(
   article: Element | null | undefined,
@@ -185,8 +255,14 @@ export async function requestCommunityNote(
 
   // Items can render a beat after the container; use whatever budget is left (at least 250 ms).
   const remaining = Math.max(250, timeoutMs - (Date.now() - started));
-  const found = await waitFor(doc, () => findCommunityNoteMenuItem(menu), remaining);
+  const fill = options.fill?.explanation.trim() ? options.fill : undefined;
+  const found = await waitFor(doc, () => findCommunityNoteMenuItem(menu, fill ? "request" : undefined), remaining);
   if (!found) return { status: "not_offered", reason: "no_item" };
+
+  if (fill && found.item === "request") {
+    found.element.click();
+    return fillRequestForm(doc, fill, options.formTimeoutMs ?? 6000);
+  }
 
   highlight(found.element, doc, options.highlightMs ?? 15_000);
   scrollTo(found.element, "nearest");

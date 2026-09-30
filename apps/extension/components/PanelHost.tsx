@@ -9,7 +9,7 @@ export interface PanelHostProps {
   store: PanelStore;
   client: AnalysisClient;
   onOpenSettings: () => void;
-  onRequestCommunityNote: (post: PostContext) => Promise<CommunityNoteMenuStatus>;
+  onRequestCommunityNote: (post: PostContext, explanation?: string) => Promise<CommunityNoteMenuStatus>;
 }
 
 /** Bridges the content script's panel store to the single drawer instance. */

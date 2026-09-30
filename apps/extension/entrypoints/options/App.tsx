@@ -291,6 +291,37 @@ export function App() {
               </button>
             </div>
 
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p id="auto-send-label" className="text-[13px] font-medium">
+                  Send Community Note requests automatically
+                </p>
+                <p id="auto-send-hint" className="text-[12px] leading-5 text-muted-foreground">
+                  “Request a Community Note” always fills X's request form with your note draft. With this on, Kavannah
+                  also presses X's “Agree &amp; Request a note” button, from your X account, without a last review.
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.autoSendCommunityNote}
+                aria-labelledby="auto-send-label"
+                aria-describedby="auto-send-hint"
+                onClick={() => void save({ autoSendCommunityNote: !settings.autoSendCommunityNote })}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                  settings.autoSendCommunityNote ? "bg-primary" : "bg-muted-foreground/40",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block size-5 rounded-full bg-white shadow transition-transform",
+                    settings.autoSendCommunityNote ? "translate-x-5.5" : "translate-x-0.5",
+                  )}
+                />
+              </button>
+            </div>
+
             <div className="space-y-2">
               <Button variant="outline" onClick={() => void testConnection()} disabled={health.status === "testing"}>
                 {health.status === "testing" ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : null}

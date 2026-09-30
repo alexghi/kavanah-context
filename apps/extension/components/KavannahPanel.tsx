@@ -56,7 +56,8 @@ export interface KavannahPanelProps {
   onDismissNotice?: () => void;
   onClose?: () => void;
   onOpenSettings?: () => void;
-  onRequestCommunityNote?: (post: PostContext) => Promise<CommunityNoteMenuStatus>;
+  /** Run X's Community Note request flow; with `explanation`, open X's form and fill it. */
+  onRequestCommunityNote?: (post: PostContext, explanation?: string) => Promise<CommunityNoteMenuStatus>;
   /** True when the caller knows the answer will come from demo fixtures (shows the Demo chip early). */
   demo?: boolean;
 }
@@ -89,6 +90,8 @@ export function KavannahPanel({
   const [openSections, setOpenSections] = useState(ALL_CLOSED);
   // Drafts already started automatically, so closing one and reopening its section doesn't regenerate it.
   const autoDrafted = useRef(new Set<string>());
+  // "Request a Community Note" was pressed before the draft existed: the request runs once it is ready.
+  const [requestPending, setRequestPending] = useState(false);
   const guideRef = useRef<HTMLElement>(null);
   const postUrl = post?.url ?? null;
 
@@ -98,6 +101,7 @@ export function KavannahPanel({
 
   useEffect(() => {
     setNoteRequest({ status: "idle" });
+    setRequestPending(false);
     setOpenSections(ALL_CLOSED);
     const body = bodyRef.current;
     if (body && typeof body.scrollTo === "function") body.scrollTo({ top: 0 });
@@ -121,19 +125,47 @@ export function KavannahPanel({
     }
   };
 
-  const handleRequestNote = async () => {
+  const runNoteRequest = async (explanation: string) => {
+    if (!post || !onRequestCommunityNote) return;
+    setNoteRequest({ status: "working" });
+    try {
+      setNoteRequest(await onRequestCommunityNote(post, explanation));
+    } catch (err) {
+      setNoteRequest({ status: "error", message: describeError(err) });
+    }
+  };
+
+  /** X's request form is filled with the note draft (as edited); without one yet, draft it first. */
+  const handleRequestNote = () => {
     if (!post) return;
     if (!onRequestCommunityNote) {
       setNoteRequest({ status: "not_offered", reason: "no_article" });
       return;
     }
-    setNoteRequest({ status: "working" });
-    try {
-      setNoteRequest(await onRequestCommunityNote(post));
-    } catch (err) {
-      setNoteRequest({ status: "error", message: describeError(err) });
+    if (state.status !== "result") return;
+    const draft = state.drafts.community_note;
+    if (draft.status === "ready") {
+      void runNoteRequest(draft.text);
+      return;
     }
+    setNoteRequest({ status: "working" });
+    setRequestPending(true);
+    if (draft.status !== "loading") void generateDraft("community_note");
   };
+
+  const noteDraft = state.status === "result" ? state.drafts.community_note : null;
+  useEffect(() => {
+    if (!requestPending || !noteDraft) return;
+    if (noteDraft.status === "ready") {
+      setRequestPending(false);
+      void runNoteRequest(noteDraft.text);
+    } else if (noteDraft.status !== "loading") {
+      // Drafting failed or was closed: the draft editor shows why, nothing is sent to X.
+      setRequestPending(false);
+      setNoteRequest({ status: "idle" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on draft status changes only
+  }, [requestPending, noteDraft?.status]);
 
   // Opening a section whose answer is "yes" shows its draft straight away; otherwise the draft stays on demand.
   const handleSectionChange = (id: DecisionId, sectionOpen: boolean) => {
@@ -317,7 +349,7 @@ export function KavannahPanel({
               open={openSections.note}
               onOpenChange={(sectionOpen) => handleSectionChange("note", sectionOpen)}
               onPrepare={() => void generateDraft("community_note")}
-              onRequest={() => void handleRequestNote()}
+              onRequest={handleRequestNote}
               onRegenerate={() => void generateDraft("community_note", { regenerate: true })}
               onRetryDraft={() => void generateDraft("community_note")}
               onChangeText={(text) => setDraftText("community_note", text)}

@@ -14,6 +14,8 @@
     3. quoting  fixture "mention-not-use" quoting the hero post           status id 1000000000000000009
     4. benign   fixture "benign-factual" (@civic_notes_eu)                status id 1000000000000000005
 
+  Choosing "Request Community Note" opens an imitation of X's request form (same field names as x.com);
+  window.__xFake.requests records what "Agree & Request a note" would have sent.
   Clicking a caret opens an imitation of X's ••• menu (div[role="menu"] with div[role="menuitem"] entries,
   including "Request Community Note" and "Write a Community Note"). Escape or an outside click closes it.
   window.__xFake records menu opens and item clicks so the harness can assert nothing was clicked.
@@ -628,6 +630,53 @@
         opacity: 0.5;
       }
 
+      /* ---- imitation of X's "Request Community Note" form (rendered into #layers) ---- */
+      .x-note-request {
+        position: fixed;
+        top: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 400px;
+        z-index: 30;
+        background: var(--menu-bg);
+        border-radius: 16px;
+        box-shadow: var(--menu-shadow);
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .x-note-request h2 {
+        margin: 0;
+        font-size: 20px;
+      }
+      .x-note-request label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 13px;
+      }
+      .x-note-request input,
+      .x-note-request textarea {
+        font: inherit;
+        color: inherit;
+        background: transparent;
+        border: 1px solid rgba(128, 128, 128, 0.5);
+        border-radius: 4px;
+        padding: 8px;
+      }
+      .x-note-request textarea {
+        min-height: 110px;
+      }
+      .x-note-request button {
+        font: inherit;
+        font-weight: 700;
+        border: 0;
+        border-radius: 999px;
+        padding: 10px;
+        cursor: pointer;
+      }
+
       /* ---- imitation of X's ••• menu (rendered into #layers) ---- */
       .x-menu {
         position: absolute;
@@ -928,7 +977,7 @@
     <script>
       (function () {
         var layers = document.getElementById("layers");
-        var state = { menu: null, opens: 0, itemClicks: [], navigations: [] };
+        var state = { menu: null, form: null, opens: 0, itemClicks: [], navigations: [], requests: [] };
         window.__xFake = state;
 
         var ICONS = {
@@ -966,6 +1015,36 @@
           }
         }
 
+        function closeForm() {
+          if (state.form) {
+            state.form.remove();
+            state.form = null;
+          }
+        }
+
+        // Same field names as X's /i/communitynotes/noterequest/<id> form.
+        function openRequestForm() {
+          closeForm();
+          var form = document.createElement("div");
+          form.setAttribute("role", "dialog");
+          form.className = "x-note-request";
+          form.innerHTML =
+            "<h2>Request a Community Note</h2>" +
+            "<label><span>Link to an X post</span><input type='text' name='NoteRequestFormTextInput' inputmode='url'></label>" +
+            "<label><span>Explanation</span><textarea name='NoteRequestExplanationFormTextInput' maxlength='2000'></textarea></label>" +
+            "<button type='button'><span>Agree &amp; Request a note</span></button>";
+          form.querySelector("button").addEventListener("click", function (e) {
+            e.stopPropagation();
+            state.requests.push({
+              source: form.querySelector("input").value,
+              explanation: form.querySelector("textarea").value
+            });
+            closeForm();
+          });
+          layers.appendChild(form);
+          state.form = form;
+        }
+
         function openMenu(caret) {
           closeMenu();
           var article = caret.closest("article");
@@ -988,6 +1067,7 @@
               e.stopPropagation();
               state.itemClicks.push(item.label);
               closeMenu();
+              if (item.label === "Request Community Note") openRequestForm();
             });
             menu.appendChild(el);
           });
@@ -1022,6 +1102,7 @@
           "keydown",
           function (e) {
             if (e.key === "Escape" && state.menu) closeMenu();
+            if (e.key === "Escape" && state.form) closeForm();
           },
           true
         );

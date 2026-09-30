@@ -34,7 +34,14 @@ export default defineContentScript({
       return findMainPostArticle(document, location.href);
     };
 
-    const requestForCurrent = (): Promise<CommunityNoteMenuStatus> => requestCommunityNote(currentArticle());
+    /** With a drafted note: open X's request form and fill it; the request is sent only if the user opted in. */
+    const requestForCurrent = async (explanation?: string): Promise<CommunityNoteMenuStatus> => {
+      const article = currentArticle();
+      if (!explanation?.trim()) return requestCommunityNote(article);
+      const settings = await client.getSettings();
+      const submit = settings.ok && settings.data.autoSendCommunityNote;
+      return requestCommunityNote(article, { fill: { explanation, submit } });
+    };
 
     // One panel instance for the whole page, rendered once inside a shadow root. WXT moves the
     // Tailwind `@property` rules into document.head itself (splitShadowRootCss), so rings, shadows
@@ -52,7 +59,7 @@ export default defineContentScript({
             store={store}
             client={client}
             onOpenSettings={openSettings}
-            onRequestCommunityNote={requestForCurrent}
+            onRequestCommunityNote={(_post, explanation) => requestForCurrent(explanation)}
           />,
         );
         return root;
@@ -110,7 +117,7 @@ export default defineContentScript({
         return undefined;
       }
       if (message.type === "kavannah:requestCommunityNote") {
-        requestForCurrent().then(
+        requestForCurrent(message.payload?.explanation).then(
           (status) => sendResponse({ ok: true, data: status } satisfies ExtensionResponse<CommunityNoteMenuStatus>),
           (err: unknown) => sendResponse({ ok: false, error: { code: "MENU_FLOW", message: describeError(err) } }),
         );
