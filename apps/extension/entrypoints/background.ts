@@ -1,5 +1,6 @@
 import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
+import { ANALYZE_PORT_NAME, type AnalyzePortStart } from "@kavannah/shared";
 import { createRouter, isBackgroundMessage } from "@/lib/background/router";
 import { getSettings, setSettings } from "@/lib/settings";
 
@@ -22,5 +23,31 @@ export default defineBackground(() => {
     if (!isBackgroundMessage(message)) return undefined;
     void router.handle(message).then(sendResponse);
     return true; // keep the channel open for the async response
+  });
+
+  // Progressive analyses: one Port per analysis; events flow back until the worker disconnects.
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== ANALYZE_PORT_NAME) return;
+    const controller = new AbortController();
+    port.onDisconnect.addListener(() => controller.abort());
+    port.onMessage.addListener((message: unknown) => {
+      const start = message as Partial<AnalyzePortStart> | null;
+      if (!start || start.type !== "kavannah:analyze:start" || !start.payload?.post) return;
+      void router
+        .analyzeStream(start.payload, (event) => {
+          try {
+            port.postMessage(event);
+          } catch {
+            controller.abort(); // the page is gone
+          }
+        }, controller.signal)
+        .finally(() => {
+          try {
+            port.disconnect();
+          } catch {
+            /* already closed */
+          }
+        });
+    });
   });
 });

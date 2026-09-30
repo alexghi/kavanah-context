@@ -1,12 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import type { Effort } from "../../config.js";
 import type { Logger } from "../log.js";
 import { silentLogger } from "../log.js";
 import { extractCandidateSources } from "../sources/candidates.js";
 import {
   fail,
   ok,
+  type Effort,
   type ModelProvider,
   type ModelResult,
   type SearchOutcome,
@@ -35,6 +35,16 @@ export const DEFAULT_SEARCH_MAX_TOKENS = 8000;
 export const DEFAULT_SEARCH_MAX_USES = 6;
 export const MAX_PAUSE_TURN_RESUMES = 2;
 
+/** Haiku 4.5 (and older models) reject `output_config.effort`. */
+export function supportsEffort(model: string): boolean {
+  return !/haiku|claude-3|sonnet-4-5|opus-4-5|sonnet-4-\d{8}|opus-4-\d{8}/.test(model);
+}
+
+/** Haiku 4.5 (and older models) only run the basic web search tool; newer models take the filtering variant. */
+export function webSearchToolType(model: string): "web_search_20250305" | "web_search_20260209" {
+  return supportsEffort(model) ? "web_search_20260209" : "web_search_20250305";
+}
+
 export function createAnthropicClient(): AnthropicClientLike {
   // Reads ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL from the environment.
   return new Anthropic({ maxRetries: 1, timeout: 120_000 });
@@ -46,17 +56,18 @@ export function mapAnthropicError(err: unknown): ModelResult<never> {
     return fail("auth", "Anthropic API authentication failed (check ANTHROPIC_API_KEY)");
   }
   if (err instanceof Anthropic.RateLimitError) {
-    return fail("rate_limited", "Anthropic API rate limit reached; try again shortly");
+    return fail("rate_limited", "Anthropic API rate limit reached; try again shortly", true);
   }
   if (err instanceof Anthropic.APIConnectionTimeoutError) {
-    return fail("timeout", "the request to the Anthropic API timed out");
+    return fail("timeout", "the request to the Anthropic API timed out", true);
   }
   if (err instanceof Anthropic.APIConnectionError) {
-    return fail("api_error", `could not reach the Anthropic API: ${err.message}`);
+    return fail("api_error", `could not reach the Anthropic API: ${err.message}`, true);
   }
   if (err instanceof Anthropic.APIError) {
-    if (err.status === 529) return fail("rate_limited", "the Anthropic API is overloaded; try again shortly");
-    return fail("api_error", `Anthropic API error${err.status ? ` ${err.status}` : ""}: ${err.message}`);
+    if (err.status === 529) return fail("rate_limited", "the Anthropic API is overloaded; try again shortly", true);
+    const retryable = typeof err.status === "number" && err.status >= 500;
+    return fail("api_error", `Anthropic API error${err.status ? ` ${err.status}` : ""}: ${err.message}`, retryable);
   }
   if (err instanceof Anthropic.AnthropicError) {
     // Thrown by the structured-output parser for malformed / off-schema output.
@@ -106,6 +117,7 @@ export class AnthropicProvider implements ModelProvider {
    */
   async structured<T>(request: StructuredRequest<T>): Promise<ModelResult<T>> {
     const format = zodOutputFormat(request.schema);
+    const effort = request.effort ?? this.effort;
     let response: Anthropic.Messages.Message;
     try {
       response = await this.client.messages.create({
@@ -113,7 +125,7 @@ export class AnthropicProvider implements ModelProvider {
         max_tokens: request.maxTokens ?? DEFAULT_STAGE_MAX_TOKENS,
         system: request.system,
         messages: [{ role: "user", content: request.user }],
-        output_config: { format, effort: this.effort },
+        output_config: supportsEffort(this.model) ? { format, effort } : { format },
       });
     } catch (err) {
       const mapped = mapAnthropicError(err);
@@ -155,8 +167,8 @@ export class AnthropicProvider implements ModelProvider {
           max_tokens: request.maxTokens ?? DEFAULT_SEARCH_MAX_TOKENS,
           system: request.system,
           messages: [...messages], // fresh array per call: the resume loop appends to `messages`
-          tools: [{ type: "web_search_20260209", name: "web_search", max_uses: request.maxUses ?? DEFAULT_SEARCH_MAX_USES }],
-          output_config: { effort: this.effort },
+          tools: [{ type: webSearchToolType(this.model), name: "web_search", max_uses: request.maxUses ?? DEFAULT_SEARCH_MAX_USES }],
+          ...(supportsEffort(this.model) ? { output_config: { effort: request.effort ?? this.effort } } : {}),
         });
       } catch (err) {
         return mapAnthropicError(err);

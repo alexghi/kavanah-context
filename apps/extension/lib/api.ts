@@ -1,4 +1,10 @@
 import { browser } from "wxt/browser";
+import {
+  ANALYZE_PORT_NAME,
+  AnalysisEventSchema,
+  type AnalysisProgress,
+  type AnalyzePortStart,
+} from "@kavannah/shared";
 import type {
   AnalyzeOptions,
   AnalyzePostResponse,
@@ -65,10 +71,51 @@ export async function sendToTab<T>(tabId: number, message: ExtensionMessage): Pr
   }
 }
 
+export type ProgressHandler = (progress: AnalysisProgress) => void;
+
 /** What the panel needs: the two model-backed calls. Injected so the UI is testable without a browser. */
 export interface AnalysisClient {
-  analyze(post: PostContext, options?: AnalyzeOptions): Promise<ExtensionResponse<AnalyzePostResponse>>;
+  /** With `onProgress`, parts of the analysis arrive as the server finishes them. */
+  analyze(post: PostContext, options?: AnalyzeOptions, onProgress?: ProgressHandler): Promise<ExtensionResponse<AnalyzePostResponse>>;
   draft(request: DraftRequest): Promise<ExtensionResponse<DraftResponse>>;
+}
+
+/**
+ * Progressive analysis over a runtime Port: progress events feed `onProgress`; the promise
+ * settles with the result or error event, or with a messaging failure when the worker goes away.
+ */
+export function analyzeViaPort(post: PostContext, options: AnalyzeOptions | undefined, onProgress?: ProgressHandler): Promise<ExtensionResponse<AnalyzePostResponse>> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const settle = (response: ExtensionResponse<AnalyzePostResponse>) => {
+      if (settled) return;
+      settled = true;
+      resolve(response);
+    };
+    let port: ReturnType<typeof browser.runtime.connect>;
+    try {
+      port = browser.runtime.connect({ name: ANALYZE_PORT_NAME });
+    } catch (err) {
+      settle(messagingFailure(err));
+      return;
+    }
+    port.onMessage.addListener((message: unknown) => {
+      const event = AnalysisEventSchema.safeParse(message);
+      if (!event.success) return;
+      if (event.data.type === "progress") onProgress?.(event.data.progress);
+      else if (event.data.type === "result") settle({ ok: true, data: event.data.analysis });
+      else settle({ ok: false, error: event.data.error });
+    });
+    port.onDisconnect.addListener(() => {
+      settle(messagingFailure(new Error(browser.runtime.lastError?.message ?? "The message port closed before the analysis finished.")));
+    });
+    const start: AnalyzePortStart = { type: "kavannah:analyze:start", payload: options ? { post, options } : { post } };
+    try {
+      port.postMessage(start);
+    } catch (err) {
+      settle(messagingFailure(err));
+    }
+  });
 }
 
 export interface KavannahClient extends AnalysisClient {
@@ -80,8 +127,8 @@ export interface KavannahClient extends AnalysisClient {
 }
 
 export const client: KavannahClient = {
-  analyze: (post, options) =>
-    sendToBackground({ type: "kavannah:analyze", payload: options ? { post, options } : { post } }),
+  analyze: (post, options, onProgress) =>
+    onProgress ? analyzeViaPort(post, options, onProgress) : sendToBackground({ type: "kavannah:analyze", payload: options ? { post, options } : { post } }),
   draft: (request) => sendToBackground({ type: "kavannah:draft", payload: request }),
   health: () => sendToBackground({ type: "kavannah:health" }),
   fixtures: () => sendToBackground({ type: "kavannah:fixtures" }),
@@ -93,7 +140,7 @@ export const client: KavannahClient = {
 /** Same client, but every call is answered from the demo fixtures (popup demo picker). */
 export function withMock(base: AnalysisClient): AnalysisClient {
   return {
-    analyze: (post, options) => base.analyze(post, { ...options, mock: true }),
+    analyze: (post, options, onProgress) => base.analyze(post, { ...options, mock: true }, onProgress),
     draft: (request) => base.draft({ ...request, options: { ...request.options, mock: true } }),
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { LoaderCircle, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
+import { CircleHelp, LoaderCircle, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
 import type { AnalysisMeta, DraftKind, PostContext } from "@kavannah/shared";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import type { AnalysisClient } from "@/lib/api";
@@ -7,7 +7,8 @@ import { ALL_CLOSED, type DecisionId } from "@/lib/decisions";
 import type { HostTheme } from "@/lib/theme";
 import { cn, describeError, formatDuration } from "@/lib/utils";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
-import { AssessmentCard } from "./AssessmentCard";
+import { AnalysisGuide } from "./AnalysisGuide";
+import { AssessmentCard, viewOfAnalysis, viewOfProgress } from "./AssessmentCard";
 import { CommunityNoteCard, type NoteRequestState } from "./CommunityNoteCard";
 import { EngageCard } from "./EngageCard";
 import { PostPreview } from "./PostPreview";
@@ -15,6 +16,30 @@ import { StageProgress } from "./StageProgress";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
+import { Card, CardHeader } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
+import { SectionLabel } from "./SectionLabel";
+
+/** Stands in for a recommendation card until the analysis is complete. */
+function RecommendationPending({ label, text }: { label: string; text: string }) {
+  return (
+    <Card aria-busy="true">
+      <CardHeader className="gap-2 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="size-8 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <SectionLabel>{label}</SectionLabel>
+            <Skeleton className="h-4 w-2/5" />
+          </div>
+        </div>
+        <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+          {text}
+        </p>
+      </CardHeader>
+    </Card>
+  );
+}
 
 export const PANEL_Z_INDEX = 2147483000;
 export const PANEL_WIDTH_PX = 420;
@@ -60,9 +85,11 @@ export function KavannahPanel({
   const bodyRef = useRef<HTMLDivElement>(null);
   const [hidden, setHidden] = useState(isDrawer && !open);
   const [noteRequest, setNoteRequest] = useState<NoteRequestState>({ status: "idle" });
+  const [guideOpen, setGuideOpen] = useState(false);
   const [openSections, setOpenSections] = useState(ALL_CLOSED);
   // Drafts already started automatically, so closing one and reopening its section doesn't regenerate it.
   const autoDrafted = useRef(new Set<string>());
+  const guideRef = useRef<HTMLElement>(null);
   const postUrl = post?.url ?? null;
 
   useEffect(() => {
@@ -122,9 +149,22 @@ export function KavannahPanel({
     autoDrafted.current.add(key);
     void generateDraft(kind);
   };
+  const disinfoSection = { open: openSections.disinfo, onOpenChange: (sectionOpen: boolean) => handleSectionChange("disinfo", sectionOpen) };
 
   const mode = state.status === "result" ? state.analysis.meta.mode : demo ? "mock" : null;
   const showsCurrent = post !== null && state.post?.url === post.url;
+  const hasResult = post !== null && showsCurrent && state.status === "result";
+
+  /** Header help button: open "How to read this analysis" and bring it into view. */
+  const showGuide = () => {
+    setGuideOpen(true);
+    requestAnimationFrame(() => {
+      const guide = guideRef.current;
+      if (!guide) return;
+      if (typeof guide.scrollIntoView === "function") guide.scrollIntoView({ behavior: "smooth", block: "start" });
+      guide.querySelector("button")?.focus({ preventScroll: true });
+    });
+  };
 
   return (
     <div
@@ -145,7 +185,7 @@ export function KavannahPanel({
       )}
       style={isDrawer ? { zIndex: PANEL_Z_INDEX, visibility: hidden ? "hidden" : "visible" } : undefined}
     >
-      <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-border bg-card px-4 py-3">
         <span
           aria-hidden="true"
           className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-[15px] font-bold leading-none text-primary-foreground"
@@ -155,6 +195,17 @@ export function KavannahPanel({
         <span className="text-[15px] font-semibold tracking-tight">Kavannah</span>
         {mode === "mock" && <Badge variant="accent">Demo</Badge>}
         <div className="ml-auto flex items-center gap-1">
+          {hasResult && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Explain labels and scores"
+              title="How to read this analysis"
+              onClick={showGuide}
+            >
+              <CircleHelp aria-hidden="true" />
+            </Button>
+          )}
           {onOpenSettings && (
             <Button variant="ghost" size="icon" aria-label="Open Kavannah settings" title="Settings" onClick={onOpenSettings}>
               <SettingsIcon aria-hidden="true" />
@@ -178,7 +229,7 @@ export function KavannahPanel({
                 {onDismissNotice && (
                   <button
                     type="button"
-                    className="shrink-0 cursor-pointer text-[12px] font-medium underline underline-offset-2 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                    className="shrink-0 cursor-pointer text-[12px] font-medium underline underline-offset-2 hover:text-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
                     onClick={onDismissNotice}
                   >
                     Dismiss
@@ -193,7 +244,7 @@ export function KavannahPanel({
           <PostPreview post={post} />
         ) : (
           <p className="px-4 py-6 text-center text-[13px] leading-5 text-muted-foreground">
-            Click the <span className="font-bold text-primary">K</span> button in a post's action bar to analyze it.
+            Click the <span className="font-bold text-link">K</span> button in a post's action bar to analyze it.
           </p>
         )}
 
@@ -204,8 +255,23 @@ export function KavannahPanel({
           </div>
         )}
 
-        {post && showsCurrent && state.status === "loading" && (
-          <StageProgress startedAt={state.startedAt} mode={demo ? "mock" : null} />
+        {post && showsCurrent && state.status === "loading" && !(state.progress && viewOfProgress(state.progress)) && (
+          <StageProgress startedAt={state.startedAt} mode={demo ? "mock" : null} phase={state.progress?.phase} ihraPending={state.progress?.ihraPending} />
+        )}
+
+        {post && showsCurrent && state.status === "loading" && state.progress && viewOfProgress(state.progress) && (
+          <div className="space-y-3 p-4">
+            <StageProgress compact startedAt={state.startedAt} mode={demo ? "mock" : null} phase={state.progress.phase} ihraPending={state.progress.ihraPending} />
+            <AssessmentCard view={viewOfProgress(state.progress)!} {...disinfoSection} />
+            <RecommendationPending
+              label="Engage"
+              text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
+            />
+            <RecommendationPending
+              label="Note"
+              text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
+            />
+          </div>
         )}
 
         {post && showsCurrent && state.status === "error" && (
@@ -229,13 +295,9 @@ export function KavannahPanel({
           </div>
         )}
 
-        {post && showsCurrent && state.status === "result" && (
-          <div className="space-y-2 p-4">
-            <AssessmentCard
-              analysis={state.analysis}
-              open={openSections.disinfo}
-              onOpenChange={(sectionOpen) => handleSectionChange("disinfo", sectionOpen)}
-            />
+        {hasResult && state.status === "result" && (
+          <div className="space-y-3 p-4">
+            <AssessmentCard view={viewOfAnalysis(state.analysis)} {...disinfoSection} />
             <EngageCard
               engagement={state.analysis.engagement}
               draft={state.drafts.reply}
@@ -262,7 +324,8 @@ export function KavannahPanel({
               onResetDraft={() => resetDraft("community_note")}
               onCloseDraft={() => closeDraft("community_note")}
             />
-            <p className="pb-1 text-center text-[11.5px] text-muted-foreground">{footerText(state.analysis.meta)}</p>
+            <AnalysisGuide open={guideOpen} onOpenChange={setGuideOpen} containerRef={guideRef} />
+            <p className="pb-1 text-center text-[12px] text-muted-foreground">{footerText(state.analysis.meta)}</p>
           </div>
         )}
       </div>

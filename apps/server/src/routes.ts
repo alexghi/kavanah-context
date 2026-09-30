@@ -6,12 +6,14 @@ import {
   DraftResponseSchema,
   FixturesResponseSchema,
   HealthResponseSchema,
+  type AnalysisEvent,
   type AnalyzeOptions,
   type AnalyzePostResponse,
   type FixturesResponse,
   type HealthResponse,
 } from "@kavannah/shared";
 import { Router, type ErrorRequestHandler, type Request, type RequestHandler, type Response } from "express";
+import { RoutingProvider } from "./lib/ai/router.js";
 import type { ServerConfig } from "./config.js";
 import type { ModelProvider } from "./lib/ai/provider.js";
 import { analyzePost, AnalysisFailedError } from "./lib/analysis/analyzePost.js";
@@ -49,6 +51,40 @@ export function isMockRequest(ctx: AppContext, options: AnalyzeOptions | undefin
 
 export function principalOf(res: Response): Principal {
   return (res.locals.principal as Principal | undefined) ?? ANONYMOUS;
+}
+
+export const NDJSON = "application/x-ndjson";
+
+/** The client asked for progressive delivery (one JSON object per line as the analysis advances). */
+export function wantsStream(req: Request): boolean {
+  return (req.get("accept") ?? "").toLowerCase().includes(NDJSON);
+}
+
+/**
+ * NDJSON writer for one analysis. Headers go out before the first model call so the client sees
+ * progress; anything that fails after that is reported as an "error" event on the stream.
+ */
+export function openStream(_req: Request, res: Response): { send(event: AnalysisEvent): void; end(): void } {
+  res.status(200);
+  res.setHeader("content-type", `${NDJSON}; charset=utf-8`);
+  res.setHeader("cache-control", "no-cache, no-transform");
+  res.setHeader("x-accel-buffering", "no");
+  res.flushHeaders();
+  // The RESPONSE's close event means the client went away (the request's fires as soon as its
+  // body has been read, which would silence every write).
+  let closed = false;
+  res.on("close", () => {
+    closed = true;
+  });
+  return {
+    send(event) {
+      if (closed || res.writableEnded) return;
+      res.write(`${JSON.stringify(event)}\n`);
+    },
+    end() {
+      if (!res.writableEnded) res.end();
+    },
+  };
 }
 
 /** Rate-limit identity: the key's owner, or the client IP when the server is open. */
@@ -109,6 +145,13 @@ export function createRouter(ctx: AppContext): Router {
       version: ctx.config.version,
       auth: authInfo,
     };
+    if (ctx.provider instanceof RoutingProvider) {
+      const { judge, fast, search } = ctx.provider.tiers;
+      body.models = { judge: judge.model };
+      if (fast) body.models.fast = fast.model;
+      if (search) body.models.search = search.model;
+      if (ctx.config.openRouterFailover) body.models.failover = "openrouter";
+    }
     res.json(HealthResponseSchema.parse(body));
   });
 
@@ -127,29 +170,61 @@ export function createRouter(ctx: AppContext): Router {
     const { post, options } = parsed.data;
     const mock = isMockRequest(ctx, options);
     res.locals.mode = mock ? "mock" : "live";
+    const streaming = wantsStream(req);
 
     let response: AnalyzePostResponse;
     if (mock || !ctx.provider) {
-      response = await mockAnalyze(post, options, { delayMs: ctx.mockDelayMs });
-    } else {
-      const key = analysisCacheKey(post, options?.preferences);
-      const cached = options?.refresh ? undefined : ctx.cache.get(key);
-      if (cached) {
-        res.locals.cache = "hit";
-        response = cached;
-      } else {
-        const release = admitLiveWork(limiter, gate, req, res);
-        if (!release) return;
-        try {
-          response = await analyzePost(post, options, { provider: ctx.provider, validateUrl: ctx.validateUrl, log: ctx.log });
-        } finally {
-          release();
-        }
-        ctx.cache.set(key, response);
-      }
+      const stream = streaming ? openStream(req, res) : null;
+      response = await mockAnalyze(post, options, { delayMs: ctx.mockDelayMs, onProgress: stream ? (progress) => stream.send({ type: "progress", progress }) : undefined });
+      const validated = AnalyzePostResponseSchema.parse(response);
+      if (stream) {
+        stream.send({ type: "result", analysis: validated });
+        stream.end();
+      } else res.json(validated);
+      return;
     }
+
+    const key = analysisCacheKey(post, options?.preferences);
+    const cached = options?.refresh ? undefined : ctx.cache.get(key);
+    if (cached) {
+      res.locals.cache = "hit";
+      const validated = AnalyzePostResponseSchema.parse(cached);
+      if (streaming) {
+        const stream = openStream(req, res);
+        stream.send({ type: "result", analysis: validated });
+        stream.end();
+      } else res.json(validated);
+      return;
+    }
+
+    const release = admitLiveWork(limiter, gate, req, res);
+    if (!release) return;
+    // Headers go out now (after admission control), so 401/429/503 above stay plain JSON.
+    const stream = streaming ? openStream(req, res) : null;
+    try {
+      response = await analyzePost(post, options, {
+        provider: ctx.provider,
+        validateUrl: ctx.validateUrl,
+        log: ctx.log,
+        onProgress: stream ? (progress) => stream.send({ type: "progress", progress }) : undefined,
+      });
+    } catch (err) {
+      if (!stream) throw err;
+      const failed = err instanceof AnalysisFailedError;
+      if (!failed) ctx.log.error(`unhandled error on ${req.method} ${req.originalUrl}`, err instanceof Error ? err.stack : err);
+      stream.send({ type: "error", error: failed ? { code: "analysis_failed", message: err.message } : { code: "internal_error", message: "Internal server error; see the server log." } });
+      stream.end();
+      return;
+    } finally {
+      release();
+    }
+    ctx.cache.set(key, response);
     // Validation failure here is a server bug → error handler → 500 internal_error.
-    res.json(AnalyzePostResponseSchema.parse(response));
+    const validated = AnalyzePostResponseSchema.parse(response);
+    if (stream) {
+      stream.send({ type: "result", analysis: validated });
+      stream.end();
+    } else res.json(validated);
   });
 
   router.post(API_ROUTES.draft, auth, async (req, res) => {

@@ -7,12 +7,13 @@ import {
   type Classification,
   type DraftKind,
   type EvidenceItem,
+  type IhraAssessment,
   type PostContext,
   type Source,
 } from "@kavannah/shared";
 import type { CandidateSource } from "../ai/provider.js";
 
-export const PROMPT_VERSION = "2026-09-29.1";
+export const PROMPT_VERSION = "2026-09-30.1";
 
 // ---------------------------------------------------------------------------
 // Post rendering: the post is DATA, delimited and escaped, never instructions.
@@ -65,23 +66,36 @@ General rules:
 - Communicate uncertainty clearly. Never claim certainty when the evidence is uncertain.
 - Write explanations and rationales in English, in plain language, concisely.`;
 
-const ANTISEMITISM_GUIDANCE = `Antisemitism assessment (baseline: the IHRA working definition):
-"Antisemitism is a certain perception of Jews, which may be expressed as hatred toward Jews. Rhetorical and physical manifestations of antisemitism are directed toward Jewish or non-Jewish individuals and/or their property, toward Jewish community institutions and religious facilities." Manifestations may include targeting the state of Israel conceived as a Jewish collectivity.
+const IHRA_DEFINITION = `The IHRA working definition of antisemitism: "Antisemitism is a certain perception of Jews, which may be expressed as hatred toward Jews. Rhetorical and physical manifestations of antisemitism are directed toward Jewish or non-Jewish individuals and/or their property, toward Jewish community institutions and religious facilities." Manifestations might include the targeting of the state of Israel, conceived as a Jewish collectivity. However, criticism of Israel similar to that leveled against any other country cannot be regarded as antisemitic.`;
 
-Categories (use ONLY these exact values):
-- conspiracy_or_control: Jews portrayed as collectively orchestrating or controlling world events, governments, media or finance ("international Jewry", Rothschild/Soros control myths, "(((echo)))" markers used to single out Jews).
-- dehumanising_or_threatening: slurs, dehumanising comparisons (vermin, disease, parasites), threats or menacing language based on Jewish identity.
-- holocaust_denial_or_distortion: denying, minimising or distorting the Holocaust, blaming Jews for it, or shifting responsibility away from Nazi Germany and its collaborators.
-- israel_related: crossing from criticism of Israeli policy into antisemitism — holding Jews collectively responsible for Israel's actions, dual-loyalty accusations, denying Jews' right to self-determination as a uniquely racist endeavour, comparing Israeli policy to that of the Nazis.
-- classic_tropes: blood libel, ritual murder, deicide, religious demonisation, "Christ-killers".
-- incitement_to_violence: calls for, glorification of, or support for violence against Jews.
+/** The IHRA framework's patterns (sections 1-9) plus calls for violence, with the exact enum values. */
+const IHRA_PATTERNS_GUIDE = `IHRA patterns (use ONLY these exact values):
+- collective_blame (1. Jews as a collective): blaming Jews collectively for real or alleged actions; attributing actions of Israel to Jews as a people; holding Jewish individuals, institutions or communities responsible for actions of the Israeli state.
+- conspiracy_or_control (2. Conspiracy / power stereotypes): portraying Jews as secretly controlling governments, media, finance, institutions or public opinion; presenting Jews as a coordinated hidden power; invoking traditional conspiratorial stereotypes ("international Jewry", Rothschild or Soros control myths, "(((echo)))" markers that single out Jews).
+- demonization_or_dehumanization (3. Demonization / dehumanization): mendacious, dehumanizing, demonizing or stereotypical claims about Jews (slurs, comparisons to vermin, disease or parasites, menacing language); reuse or adaptation of classic antisemitic imagery aimed at Jews, including blood-libel-type narratives.
+- holocaust_denial_or_distortion (4. Holocaust denial or distortion): denial of the Holocaust; denial or minimization of its scale; denial or distortion of its mechanisms; denial or distortion of Nazi exterminatory intent; allegations that Jews or Israel invented or exaggerated the Holocaust; semantic or historical reframing that removes Jews from the specific historical category of victims of Nazi antisemitism; inappropriate appropriation or transformation of Holocaust symbols that materially changes their historical referent.
+- nazi_analogy (5. Nazi / Holocaust analogies involving Israel): comparing contemporary Israeli policy or Israeli actors to Nazi Germany, Nazis, Hitler, Auschwitz, concentration camps, extermination camps, the Final Solution or Holocaust perpetrators; symbolically placing Israel or Israelis in the role of Nazi perpetrators; placing Palestinians or another contemporary group in the historical role of Holocaust victims.
+- double_standards (6. Double standards): requiring Israel to meet a standard that is demonstrably not applied to comparable states or situations. Do not infer a double standard solely from strong criticism: identify the relevant comparator and demonstrate the asymmetry.
+- denial_of_self_determination (7. Denial of Jewish self-determination): denying Jewish people collective rights, or presenting the existence of Israel itself as inherently illegitimate in a manner corresponding to the IHRA example (e.g. claiming that the existence of a State of Israel is a racist endeavor). Distinguish this from criticism of a particular Israeli government, borders, settlements, military operations, constitutional arrangements or specific policies.
+- classic_tropes_applied_to_israel (8. Classic antisemitic symbols applied to Israel): traditional antisemitic images, accusations or tropes (blood libel, deicide / "Christ-killers", well-poisoning, world control, greed) transferred from "Jews" to "Israel", "Zionists" or Israelis. Analyze whether the change in vocabulary preserves the underlying stereotype.
+- semantic_displacement (9. Semantic displacement of Jews): changing historically established concepts in a way that removes Jews as their principal historical referent, broadens a specifically anti-Jewish historical category into a generic category, substitutes another population into the historical position occupied by Jews, or erases the specificity of antisemitic persecution.
+- incitement_to_violence (IHRA example): calling for, aiding, threatening or justifying the killing or harming of Jews.`;
 
-Assessment values: not_detected | possible | likely.
-Rules:
-- Criticism of Israel similar to that levelled against any other country is NOT antisemitic. Harsh criticism of a government's policy is political speech.
+const IHRA_RULES = `Rules:
+- Use the IHRA definition and its examples as an analytical framework. Take the overall context into account.
+- Do not classify criticism of Israel as antisemitic merely because it is harsh, controversial or hostile. Criticism of Israel comparable to criticism directed at any other country is not, by itself, antisemitic.
 - Quoting, reporting or describing antisemitism in order to condemn, counter, document or educate is MENTION, not USE, and is not antisemitic.
 - When the meaning depends on context you do not have (irony, in-group usage, an unseen image or quoted post), say "possible" and explain the uncertainty rather than asserting.
-- Antisemitic is not the same as false. A slur with no factual claim is antisemitic but is not misinformation.`;
+- Antisemitic is not the same as false. A slur with no factual claim is antisemitic but is not misinformation.
+- Do not label an entire person, organization, movement or political position antisemitic solely because one piece of content matches an IHRA example. Analyze the content itself.`;
+
+const ANTISEMITISM_GUIDANCE = `Antisemitism assessment (baseline: the IHRA working definition):
+${IHRA_DEFINITION}
+
+${IHRA_PATTERNS_GUIDE}
+
+Assessment values: not_detected | possible | likely.
+${IHRA_RULES}`;
 
 // ---------------------------------------------------------------------------
 // Stage 1: extract claims
@@ -136,7 +150,12 @@ confidence: low | medium | high — how confident YOU are in this classification
 
 disinformationScore: an integer 0-100. It is an indicative assessment of how MISLEADING the post's factual content appears. 0 = no factual issue found; 25 = some concerns; 50 = potentially misleading; 75+ = likely misleading; 100 = clearly false. It is NOT a probability and NOT the share of the post that is false. Content with no factual claim (pure opinion, slur, satire) gets a LOW score (0-15) even if it is offensive or antisemitic. An unverifiable claim from an unnamed source typically lands around 20-40 unless something contradicts it.
 
-explanation: 2-5 sentences in English. Say what the post claims, what is (or is not) problematic, and how certain you are. When you have no external evidence, say so; do not assert that a claim is false unless it contradicts well-established knowledge.`,
+explanation: 2-5 sentences in English. Say what the post claims, what is (or is not) problematic, and how certain you are. When you have no external evidence, say so; do not assert that a claim is false unless it contradicts well-established knowledge.
+antisemitism (screening; a later stage performs the full IHRA review when needed):
+- assessment: not_detected | possible | likely, from the content itself.
+- patterns: every IHRA pattern the post plausibly includes or reproduces (empty when none).
+- explanation: 1-3 sentences on what is or is not antisemitic and why.
+- needsIhraReview: true when the post refers to Jews, Israel, Israelis, Zionism or Zionists, the Holocaust, Nazism or antisemitic tropes closely enough that the full IHRA review should examine it (possible analogies, double standards, self-determination, trope transfers, semantic displacement), even when you are not sure it is antisemitic. false for posts with no such reference.`,
   user(post: PostContext): string {
     return `Classify this post.\n\n${renderPost(post)}`;
   },
@@ -211,6 +230,108 @@ Rules:
 };
 
 // ---------------------------------------------------------------------------
+// IHRA review: research (web search) and full assessment (structured)
+// Runs only when the screening in stage 2 flags the post.
+// ---------------------------------------------------------------------------
+
+function renderScreening(c: Classification): string {
+  const patterns = c.antisemitism.patterns?.length ? c.antisemitism.patterns.join(", ") : "none identified";
+  return `screening assessment: ${c.antisemitism.assessment}; patterns: ${patterns}; note: ${c.antisemitism.explanation}`;
+}
+
+/** The two parallel research calls of the IHRA review. */
+export type IhraResearchFocus = "historical" | "contemporary";
+
+const IHRA_RESEARCH_FOCUS: Record<IhraResearchFocus, string> = {
+  historical:
+    "Focus on the HISTORICAL and DEFINITIONAL context: the historical referent of any Nazi or Holocaust analogy (facts from Holocaust institutions and scholarship such as USHMM or Yad Vashem: scale, documented objectives, targeting, institutions, methods, deportation, chronology, territory); the origin and meaning of any classic trope the post applies to Israel or \"Zionists\"; the established meaning of any historical concept the post redefines; and the IHRA working definition and its examples when useful.",
+  contemporary:
+    "Focus on the CONTEMPORARY and FACTUAL context: the current situation or events the post refers to, from reputable sources (UN bodies, international courts, established news organisations), including casualty figures together with who reports them; and, for double-standard claims, how comparable states or situations are treated.",
+};
+
+export const researchIhraPrompt = {
+  system: `${COMMON_RULES}
+
+Task: you are one of the research calls of an antisemitism assessment based on the IHRA working definition. A screening step flagged this post for a full IHRA review. Use the web_search tool to find authoritative sources for the context that review needs, within the focus given in the request.
+
+Rules:
+- 1-2 focused searches, at most the tool's allowed number of uses. Search for context, not for the post's opinions.
+- Then write brief research notes (plain text, no JSON) saying what the best sources actually say. Quote only text that appeared in the search results.
+- If you found nothing relevant, say so plainly. Do not fill gaps from memory and do not list URLs you did not retrieve in this session.
+- Do not give a final assessment; a later stage decides.`,
+  user(post: PostContext, classification: Classification, focus: IhraResearchFocus = "historical"): string {
+    return `Research the context for the IHRA review of this post.\n${IHRA_RESEARCH_FOCUS[focus]}\n\nScreening:\n${renderScreening(classification)}\n\n${renderPost(post)}`;
+  },
+};
+
+export const assessIhraPrompt = {
+  system: `${COMMON_RULES}
+
+${IHRA_DEFINITION}
+
+Task: in addition to the general misinformation analysis done elsewhere, assess whether the content may constitute or reproduce antisemitic discourse according to the IHRA working definition. Use the definition and its examples as an analytical framework and take the overall context into account. Systematically check every pattern below; report a finding only for a pattern the content actually includes or reproduces.
+
+${IHRA_PATTERNS_GUIDE}
+
+${IHRA_RULES}
+
+Nazi / Holocaust analogies. If such a comparison exists, do not stop at identifying the analogy. Set analogy.present = true, name the historical and the contemporary referent, and determine whether the analogy suppresses material differences necessary to understand the two events (suppressesMaterialDifferences), stating your conclusion. (A separate step performs the point-by-point structured comparison of casualty magnitude, objectives, targeting, institutions, methods, deportation, chronology, territory, legal context and historical context; do not write it here, but base omittedDifferences on the same considerations.) Name each mechanism present from: holocaust_analogy, nazi_comparison, symbolic_substitution, historical_resemanticization, false_equivalence, holocaust_distortion. Do not treat them as interchangeable: explain precisely which mechanism is present and how (mechanismExplanation). Without such a comparison, set present = false and leave the other analogy fields empty.
+Double standards: set doubleStandard.present = true only when you can name the relevant comparator and demonstrate the asymmetry.
+Classic tropes applied to Israel: one tropeTransfers entry per transfer, as ORIGINAL ANTISEMITIC TROPE → LEXICAL / SYMBOLIC SUBSTITUTION → CONTEMPORARY TARGET, saying whether the change in vocabulary preserves the underlying stereotype.
+Semantic displacement: one semanticDisplacements entry per displacement, as HISTORICAL REFERENT → SEMANTIC OPERATION → NEW REFERENT → INFORMATIONAL CONSEQUENCE.
+
+Context test, for EVERY finding: trigger = the exact element that triggers the classification, quoted verbatim from the post when possible; ihraExample = the relevant IHRA example; whyItApplies; strengthens / weakens = contextual evidence for and against the classification; facts / interpretations = what is established versus what is your reading; confidence.
+
+IHRA ANTISEMITISM ASSESSMENT (the overall fields): assessment (not_detected | possible | likely); confidence; summary (the assessment in 2-4 sentences); mechanism (the semantic / narrative mechanism); historicalContext (the historical or factual context); omittedDifferences (material differences the post omits). If no pattern applies, return not_detected with no findings and say why in the summary (for example: criticism of a policy, or quoting antisemitism to condemn it).
+
+COMMUNITY NOTE 2.0 (communityNote2): when at least one pattern is found, write a short (80-140 words), neutral, evidence-based explanation of: what is factually or historically misleading; what semantic or symbolic transformation is taking place; why that transformation matters; which historical distinctions are being erased. Cite the strongest available sources by id in sourceIds. No insults, no speculation, do not characterise the author. When nothing was found, set needed = false and leave text and sourceIds empty.
+
+Sources: cite ONLY ids from the candidate list below (evidence sources and IHRA research sources). Never invent ids, titles, URLs, quotations or statistics. Figures must come from the listed sources, or be marked basis = unknown. List every id you relied on in sourceIds.
+Length: be concise. At most 3 items in each strengthens / weakens / facts / interpretations list, one sentence each; comparison rows at most 25 words per side; omittedDifferences at most 4 items; summary, mechanism and historicalContext 2-4 sentences each.
+Write in English, plainly.`,
+  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], candidates: CandidateSource[], notes: string): string {
+    return `Perform the IHRA assessment of this post.\n\nScreening:\n${renderScreening(classification)}\n\nClaims:\n${claims.length ? renderClaims(claims) : "(none extracted)"}\n\nEvidence (claims checked against sources):\n${renderEvidence(evidence)}\n\nIHRA research sources (choose by id):\n${renderCandidates(candidates)}\n\nResearch notes from the IHRA research stage (context only, not a source):\n<notes>\n${escapeData(notes || "(none)")}\n</notes>\n\n${renderPost(post)}`;
+  },
+};
+
+/**
+ * The structured comparison the IHRA framework requires for a Nazi / Holocaust analogy. Runs in
+ * parallel with the core assessment, only when the screening (or the post's wording) points at
+ * such an analogy, so the long comparison does not hold up the rest.
+ */
+export const compareAnalogyPrompt = {
+  system: `${COMMON_RULES}
+
+${IHRA_DEFINITION}
+
+Task: the post appears to compare contemporary Israeli policy or Israeli actors to Nazi Germany, Nazis, Hitler, Auschwitz, concentration or extermination camps, the Final Solution or Holocaust perpetrators, or to place Palestinians or another contemporary group in the historical role of Holocaust victims. First confirm whether such a comparison is actually made (present). If it is, perform a structured comparison with exactly one row for each of these dimensions: casualty_magnitude, proportion_affected, documented_objectives, targeting_criteria, institutional_structures, methods_of_violence, detention_and_deportation, chronology_and_duration, territorial_scope, legal_and_military_context, historical_context.
+
+Each row gives: the historical side (the Nazi-era referent the post invokes) with its basis; the contemporary side (what the post refers to) with its basis; the material difference, or why the two are comparable on this dimension; and the ids of the sources it rests on. Basis values, judged separately for each side: sourced = stated by a listed source (cite its id in sourceIds); established = well-established historical fact or public record for which no listed source was retrieved; interpretation = your reading; unknown = disputed, or not settled by the listed sources. Figures must come from the listed sources, or the basis must be unknown.
+
+Rules: at most 25 words per side and 30 words for the difference; cite ONLY ids from the candidate list (evidence sources and IHRA research sources); never invent ids, titles, URLs, quotations or statistics. If present is false, return an empty rows list. Write in English, plainly.`,
+  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], candidates: CandidateSource[], notes: string): string {
+    return `Compare the analogy in this post point by point.\n\nScreening:\n${renderScreening(classification)}\n\nClaims:\n${claims.length ? renderClaims(claims) : "(none extracted)"}\n\nEvidence (claims checked against sources):\n${renderEvidence(evidence)}\n\nIHRA research sources (choose by id):\n${renderCandidates(candidates)}\n\nResearch notes from the IHRA research stage (context only, not a source):\n<notes>\n${escapeData(notes || "(none)")}\n</notes>\n\n${renderPost(post)}`;
+  },
+};
+
+/** Whether the comparison step should run: the screening found the pattern, or the post uses the vocabulary. */
+export const ANALOGY_VOCABULARY = /\b(nazis?|hitler|auschwitz|holocaust|shoah|final solution|concentration camps?|extermination camps?|death camps?|gestapo|third reich|goebbels|himmler|ghettos?|genocide of the jews)\b/i;
+
+export function analogySuspected(post: PostContext, classification: Classification): boolean {
+  return Boolean(classification.antisemitism.patterns?.includes("nazi_analogy")) || ANALOGY_VOCABULARY.test(post.text);
+}
+
+/** One-paragraph IHRA summary for the recommendation and draft stages. */
+export function renderIhra(ihra: IhraAssessment | undefined): string {
+  if (!ihra) return "";
+  const patterns = [...new Set(ihra.findings.map((f) => f.pattern))].join(", ") || "none";
+  const lines = [`IHRA review: ${ihra.assessment} (confidence ${ihra.confidence}); patterns: ${patterns}`, `  ${ihra.summary}`];
+  if (ihra.analogy) lines.push(`  analogy: ${ihra.analogy.historicalReferent} ↔ ${ihra.analogy.contemporaryReferent}; suppresses material differences: ${ihra.analogy.suppressesMaterialDifferences ? "yes" : "no"}`);
+  if (ihra.omittedDifferences.length) lines.push(`  omitted differences: ${ihra.omittedDifferences.join("; ")}`);
+  return `\n\n${lines.join("\n")}`;
+}
+
+// ---------------------------------------------------------------------------
 // Stage 5a / 5b: the two INDEPENDENT recommendations
 // ---------------------------------------------------------------------------
 
@@ -237,8 +358,8 @@ function renderEvidence(evidence: EvidenceItem[]): string {
     .join("\n");
 }
 
-export function renderAnalysisContext(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string): string {
-  return `Classification:\n${renderClassification(classification)}\n\nClaims:\n${claims.length ? renderClaims(claims) : "(none extracted)"}\n\nEvidence status: ${evidenceStatus}\nEvidence:\n${renderEvidence(evidence)}\n\n${renderPost(post)}`;
+export function renderAnalysisContext(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string, ihra?: IhraAssessment): string {
+  return `Classification:\n${renderClassification(classification)}${renderIhra(ihra)}\n\nClaims:\n${claims.length ? renderClaims(claims) : "(none extracted)"}\n\nEvidence status: ${evidenceStatus}\nEvidence:\n${renderEvidence(evidence)}\n\n${renderPost(post)}`;
 }
 
 export const recommendEngagementPrompt = {
@@ -253,8 +374,8 @@ Recommendation values (use ONLY these exact values):
 
 Consider: whether there is a specific claim a reply can correct; whether sourced evidence is actually available (a reply without evidence adds little); amplification and harassment risk (conspiracy bait, dog whistles, viral framing); whether the author is arguing in good faith; the user's wellbeing. If reach is unknown, do not assume it is small.
 rationale: 2-4 sentences in English that reference the evidence status honestly (e.g. "evidence unavailable", "contradicted by an official source").`,
-  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string): string {
-    return `Decide whether the user should engage (reply publicly).\n\n${renderAnalysisContext(post, classification, claims, evidence, evidenceStatus)}`;
+  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string, ihra?: IhraAssessment): string {
+    return `Decide whether the user should engage (reply publicly).\n\n${renderAnalysisContext(post, classification, claims, evidence, evidenceStatus, ihra)}`;
   },
 };
 
@@ -270,10 +391,10 @@ Recommendation values (use ONLY these exact values):
 - not_recommended: there is no clear factual claim (opinion, labelled satire, benign content, hate without a claim), or the post is accurate, so a note would be "not needed".
 - uncertain: there is a factual claim but the evidence is insufficient to write a sourced note.
 
-Remember: a slur or conspiracy framing without a checkable claim is NOT a reason for a note (notes add factual context; reporting is a different action). Conversely, a false checkable claim wrapped in hateful framing IS a good candidate for a note.
+Remember: a slur or conspiracy framing without a checkable claim is NOT a reason for a note (notes add factual context; reporting is a different action). Conversely, a false checkable claim wrapped in hateful framing IS a good candidate for a note. When the IHRA review shows that a Nazi or Holocaust analogy or another historical distortion rests on checkable historical facts (scale, aims, methods), a note that adds that context can be helpful.
 rationale: 2-4 sentences in English that reference the evidence status honestly.`,
-  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string): string {
-    return `Decide whether a Community Note is recommended for this post.\n\n${renderAnalysisContext(post, classification, claims, evidence, evidenceStatus)}`;
+  user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string, ihra?: IhraAssessment): string {
+    return `Decide whether a Community Note is recommended for this post.\n\n${renderAnalysisContext(post, classification, claims, evidence, evidenceStatus, ihra)}`;
   },
 };
 
@@ -321,6 +442,6 @@ Return the note text and the ids of the sources you used.`;
   },
   user(kind: DraftKind, post: PostContext, analysis: AnalyzePostResponse, sources: Source[], language: string): string {
     const evidenceStatus = analysis.evidence.length ? "see evidence below" : "no claims were checked against sources";
-    return `Write the ${kind === "reply" ? "reply" : "Community Note"} in this language: ${language}.\n\nAvailable sources (URLs may be used ONLY from this list):\n${renderSourcesForDraft(sources)}\n\n${renderAnalysisContext(post, analysis.classification, analysis.claims, analysis.evidence, evidenceStatus)}`;
+    return `Write the ${kind === "reply" ? "reply" : "Community Note"} in this language: ${language}.\n\nAvailable sources (URLs may be used ONLY from this list):\n${renderSourcesForDraft(sources)}\n\n${renderAnalysisContext(post, analysis.classification, analysis.claims, analysis.evidence, evidenceStatus, analysis.ihra)}`;
   },
 };

@@ -56,7 +56,7 @@ holds the project id, region and service name; nothing secret):
 
 - the project, billing link and the Cloud Run, Cloud Build, Artifact Registry and Secret Manager APIs (`setup`);
 - a runtime service account `kavannah-api@…` whose only permission is reading the two secrets;
-- Secret Manager secrets `kavannah-anthropic-api-key` and `kavannah-access-keys`, filled from `.env` (`secrets`);
+- Secret Manager secrets `kavannah-anthropic-api-key`, `kavannah-access-keys` and, when `.env` has one, `kavannah-openrouter-key` (OpenRouter failover), filled from `.env` (`secrets`);
 - the service `kavannah-api`: image built by Cloud Build from the root `Dockerfile` (a single
   bundled ESM file, plain Node 22, non-root user), 1 vCPU / 512 MiB, request timeout 300 s
   (a live analysis takes 60-120 s), 8 concurrent requests per instance, min 0 / max 2 instances,
@@ -71,8 +71,10 @@ deploy/cloudrun.sh smoke      # health + one mock analysis with the first key in
 deploy/cloudrun.sh logs 200   # recent request logs
 ```
 
-Model, effort and web-search settings are copied from `.env` at deploy time (env vars on the
-service); the API key and access keys are read from Secret Manager at instance start.
+Model tiers (`KAVANNAH_MODEL`, `KAVANNAH_MODEL_FAST`, `KAVANNAH_SEARCH_MODEL`), effort and web-search settings are
+copied from `.env` at deploy time (env vars on the service); the API key, the access keys and the OpenRouter key are
+read from Secret Manager at instance start. Cloud Run streams the NDJSON analysis events as they are written, so the
+request timeout of 300 s covers the whole analysis while the panel fills in from the first seconds.
 
 Operational notes:
 

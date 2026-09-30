@@ -19,7 +19,7 @@ export interface DraftEditorProps {
   onClose?(): void;
 }
 
-function CopyButton({ text }: { text: string }) {
+export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -42,7 +42,7 @@ function CopyButton({ text }: { text: string }) {
       aria-live="polite"
     >
       {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-      {copied ? "Copied" : failed ? "Copy failed" : "Copy"}
+      {copied ? "Copied" : failed ? "Copy failed" : label}
     </Button>
   );
 }
@@ -62,7 +62,7 @@ export function DraftEditor({ kind, state, onChange, onRegenerate, onReset, onRe
   if (state.status === "idle") return null;
 
   return (
-    <div className="space-y-2.5 rounded-lg border border-border bg-muted/40 p-3" aria-label={label}>
+    <div className="space-y-2.5 rounded-lg border border-border bg-background p-3" aria-label={label}>
       <div className="flex items-center justify-between">
         <span className="text-[12px] font-semibold text-foreground">{label}</span>
         {onClose && (
@@ -140,7 +140,7 @@ function ReadyEditor({
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
         rows={4}
-        className="bg-background"
+        className="bg-card"
       />
       <div className="flex flex-wrap items-center gap-2">
         <CopyButton text={text} />

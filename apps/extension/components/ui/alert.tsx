@@ -8,10 +8,10 @@ export const alertVariants = cva(
     variants: {
       variant: {
         default: "border-border bg-card text-foreground",
-        info: "border-primary/25 bg-accent text-accent-foreground [&>svg]:text-primary",
-        warning: "border-caution/30 bg-caution-soft text-foreground [&>svg]:text-caution",
-        destructive: "border-critical/30 bg-critical-soft text-foreground [&>svg]:text-critical",
-        positive: "border-positive/30 bg-positive-soft text-foreground [&>svg]:text-positive",
+        info: "border-primary/30 bg-accent text-accent-foreground [&>svg]:text-link",
+        warning: "border-caution-line bg-caution-soft text-foreground [&>svg]:text-caution-strong",
+        destructive: "border-critical-line bg-critical-soft text-foreground [&>svg]:text-critical-strong",
+        positive: "border-positive-line bg-positive-soft text-foreground [&>svg]:text-positive-strong",
       },
     },
     defaultVariants: { variant: "default" },

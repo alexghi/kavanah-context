@@ -85,7 +85,10 @@ export const ContentLabelSchema = z.enum([
 ]);
 export type ContentLabel = z.infer<typeof ContentLabelSchema>;
 
-/** Categories follow the IHRA working definition as used by the hackathon's reference material. */
+/**
+ * Summary categories of the first release. Still sent (derived from `patterns`, see
+ * legacyCategoriesFor) so extension builds that predate the IHRA patterns keep validating.
+ */
 export const AntisemitismCategorySchema = z.enum([
   "conspiracy_or_control",
   "dehumanising_or_threatening",
@@ -96,10 +99,49 @@ export const AntisemitismCategorySchema = z.enum([
 ]);
 export type AntisemitismCategory = z.infer<typeof AntisemitismCategorySchema>;
 
+/**
+ * The patterns the IHRA framework checks systematically (sections 1-9 of the framework) plus
+ * the IHRA example of calls for violence. Definitions: explain.ts (IHRA_PATTERNS).
+ */
+export const IhraPatternSchema = z.enum([
+  "collective_blame",
+  "conspiracy_or_control",
+  "demonization_or_dehumanization",
+  "holocaust_denial_or_distortion",
+  "nazi_analogy",
+  "double_standards",
+  "denial_of_self_determination",
+  "classic_tropes_applied_to_israel",
+  "semantic_displacement",
+  "incitement_to_violence",
+]);
+export type IhraPattern = z.infer<typeof IhraPatternSchema>;
+
+const LEGACY_CATEGORIES: Record<IhraPattern, AntisemitismCategory[]> = {
+  collective_blame: ["israel_related"],
+  conspiracy_or_control: ["conspiracy_or_control"],
+  demonization_or_dehumanization: ["dehumanising_or_threatening"],
+  holocaust_denial_or_distortion: ["holocaust_denial_or_distortion"],
+  nazi_analogy: ["israel_related"],
+  double_standards: ["israel_related"],
+  denial_of_self_determination: ["israel_related"],
+  classic_tropes_applied_to_israel: ["classic_tropes", "israel_related"],
+  semantic_displacement: ["holocaust_denial_or_distortion"],
+  incitement_to_violence: ["incitement_to_violence"],
+};
+
+/** The first-release categories that correspond to a set of IHRA patterns (deduplicated, in order). */
+export function legacyCategoriesFor(patterns: readonly IhraPattern[]): AntisemitismCategory[] {
+  return [...new Set(patterns.flatMap((pattern) => LEGACY_CATEGORIES[pattern] ?? []))];
+}
+
 export const AntisemitismAssessmentSchema = z.object({
   assessment: z.enum(["not_detected", "possible", "likely"]),
+  /** First-release summary categories (derived from `patterns` on current servers). */
   categories: z.array(AntisemitismCategorySchema),
   explanation: z.string(),
+  /** IHRA patterns found. Absent on results from servers that predate the IHRA framework. */
+  patterns: z.array(IhraPatternSchema).optional(),
 });
 export type AntisemitismAssessment = z.infer<typeof AntisemitismAssessmentSchema>;
 
@@ -153,6 +195,141 @@ export const EvidenceItemSchema = z.object({
   sources: z.array(SourceSchema),
 });
 export type EvidenceItem = z.infer<typeof EvidenceItemSchema>;
+
+// ---------------------------------------------------------------------------
+// IHRA antisemitism assessment (dedicated stage, runs when the screening flags a post)
+// ---------------------------------------------------------------------------
+
+/** How a Nazi / Holocaust analogy works. Not interchangeable: the assessment names each one present. */
+export const AnalogyMechanismSchema = z.enum([
+  "holocaust_analogy",
+  "nazi_comparison",
+  "symbolic_substitution",
+  "historical_resemanticization",
+  "false_equivalence",
+  "holocaust_distortion",
+]);
+export type AnalogyMechanism = z.infer<typeof AnalogyMechanismSchema>;
+
+/** The dimensions of the structured comparison the framework requires for an analogy. */
+export const ComparisonDimensionSchema = z.enum([
+  "casualty_magnitude",
+  "proportion_affected",
+  "documented_objectives",
+  "targeting_criteria",
+  "institutional_structures",
+  "methods_of_violence",
+  "detention_and_deportation",
+  "chronology_and_duration",
+  "territorial_scope",
+  "legal_and_military_context",
+  "historical_context",
+]);
+export type ComparisonDimension = z.infer<typeof ComparisonDimensionSchema>;
+
+/** Fact versus interpretation, per statement. */
+export const StatementBasisSchema = z.enum(["sourced", "established", "interpretation", "unknown"]);
+export type StatementBasis = z.infer<typeof StatementBasisSchema>;
+
+/** One pattern found, with the framework's context test. */
+export const IhraFindingSchema = z.object({
+  pattern: IhraPatternSchema,
+  /** The exact element of the post that triggers the finding (quoted when possible) */
+  trigger: z.string(),
+  /** The relevant IHRA example */
+  ihraExample: z.string(),
+  whyItApplies: z.string(),
+  /** Contextual evidence that strengthens / weakens the classification */
+  strengthens: z.array(z.string()),
+  weakens: z.array(z.string()),
+  facts: z.array(z.string()),
+  interpretations: z.array(z.string()),
+  confidence: ConfidenceSchema,
+});
+export type IhraFinding = z.infer<typeof IhraFindingSchema>;
+
+export const AnalogyComparisonRowSchema = z.object({
+  dimension: ComparisonDimensionSchema,
+  historical: z.string(),
+  contemporary: z.string(),
+  /** The material difference, or why the two are comparable on this dimension */
+  difference: z.string(),
+  /** Fact versus interpretation, for each side */
+  historicalBasis: StatementBasisSchema,
+  contemporaryBasis: StatementBasisSchema,
+  /** ids into IhraAssessment.sources */
+  sourceIds: z.array(z.string()),
+});
+export type AnalogyComparisonRow = z.infer<typeof AnalogyComparisonRowSchema>;
+
+export const AnalogyComparisonSchema = z.object({
+  historicalReferent: z.string(),
+  contemporaryReferent: z.string(),
+  mechanisms: z.array(AnalogyMechanismSchema),
+  mechanismExplanation: z.string(),
+  rows: z.array(AnalogyComparisonRowSchema),
+  /** Whether the analogy suppresses differences needed to understand the two events */
+  suppressesMaterialDifferences: z.boolean(),
+  conclusion: z.string(),
+});
+export type AnalogyComparison = z.infer<typeof AnalogyComparisonSchema>;
+
+/** ORIGINAL ANTISEMITIC TROPE → LEXICAL / SYMBOLIC SUBSTITUTION → CONTEMPORARY TARGET */
+export const TropeTransferSchema = z.object({
+  originalTrope: z.string(),
+  substitution: z.string(),
+  contemporaryTarget: z.string(),
+  stereotypePreserved: z.boolean(),
+  explanation: z.string(),
+});
+export type TropeTransfer = z.infer<typeof TropeTransferSchema>;
+
+/** HISTORICAL REFERENT → SEMANTIC OPERATION → NEW REFERENT → INFORMATIONAL CONSEQUENCE */
+export const SemanticDisplacementSchema = z.object({
+  historicalReferent: z.string(),
+  operation: z.string(),
+  newReferent: z.string(),
+  consequence: z.string(),
+});
+export type SemanticDisplacement = z.infer<typeof SemanticDisplacementSchema>;
+
+export const DoubleStandardSchema = z.object({
+  /** The comparable state or situation */
+  comparator: z.string(),
+  /** The demonstrated asymmetry */
+  asymmetry: z.string(),
+});
+export type DoubleStandard = z.infer<typeof DoubleStandardSchema>;
+
+/** Extended, evidence-based explanation (longer than an X Community Note). Never posted automatically. */
+export const CommunityNote2Schema = z.object({
+  text: z.string(),
+  sources: z.array(SourceSchema),
+});
+export type CommunityNote2 = z.infer<typeof CommunityNote2Schema>;
+
+export const IhraAssessmentSchema = z.object({
+  assessment: z.enum(["not_detected", "possible", "likely"]),
+  confidence: ConfidenceSchema,
+  /** "Assessment": the conclusion in a few sentences */
+  summary: z.string(),
+  /** "Relevant IHRA pattern" and "Evidence in the post", one entry per pattern found */
+  findings: z.array(IhraFindingSchema),
+  /** "Semantic / narrative mechanism" */
+  mechanism: z.string(),
+  /** "Historical or factual context" */
+  historicalContext: z.string(),
+  /** "Material differences omitted" */
+  omittedDifferences: z.array(z.string()),
+  analogy: AnalogyComparisonSchema.optional(),
+  tropeTransfers: z.array(TropeTransferSchema),
+  semanticDisplacements: z.array(SemanticDisplacementSchema),
+  doubleStandard: DoubleStandardSchema.optional(),
+  communityNote2: CommunityNote2Schema.optional(),
+  /** Every source the assessment relies on (web-search results or fixtures, never invented) */
+  sources: z.array(SourceSchema),
+});
+export type IhraAssessment = z.infer<typeof IhraAssessmentSchema>;
 
 // ---------------------------------------------------------------------------
 // The two independent recommendations
@@ -216,9 +393,41 @@ export const AnalyzePostResponseSchema = z.object({
   evidence: z.array(EvidenceItemSchema),
   engagement: EngagementSchema,
   communityNote: CommunityNoteSchema,
+  /** Full IHRA assessment. Present only when the screening flagged the post for review. */
+  ihra: IhraAssessmentSchema.optional(),
   meta: AnalysisMetaSchema,
 });
 export type AnalyzePostResponse = z.infer<typeof AnalyzePostResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Progressive delivery (NDJSON stream from POST /api/analyze with Accept: application/x-ndjson)
+// ---------------------------------------------------------------------------
+
+export const AnalysisPhaseSchema = z.enum(["classifying", "checking_evidence", "reviewing_ihra", "recommending", "done"]);
+export type AnalysisPhase = z.infer<typeof AnalysisPhaseSchema>;
+
+/** What the server has so far. Parts appear as their stages finish; `analysis` in the final event has everything. */
+export const AnalysisProgressSchema = z.object({
+  phase: AnalysisPhaseSchema,
+  post: PostContextSchema,
+  classification: ClassificationSchema.optional(),
+  claims: z.array(ClaimSchema).optional(),
+  evidence: z.array(EvidenceItemSchema).optional(),
+  /** The full IHRA review is running (or queued) for this post; `ihra` arrives later. */
+  ihraPending: z.boolean(),
+  ihra: IhraAssessmentSchema.optional(),
+  stages: z.array(StageReportSchema),
+  warnings: z.array(z.string()),
+  elapsedMs: z.number(),
+});
+export type AnalysisProgress = z.infer<typeof AnalysisProgressSchema>;
+
+export const AnalysisEventSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("progress"), progress: AnalysisProgressSchema }),
+  z.object({ type: z.literal("result"), analysis: AnalyzePostResponseSchema }),
+  z.object({ type: z.literal("error"), error: z.object({ code: z.string(), message: z.string() }) }),
+]);
+export type AnalysisEvent = z.infer<typeof AnalysisEventSchema>;
 
 // ---------------------------------------------------------------------------
 // Requests
@@ -287,6 +496,15 @@ export const HealthResponseSchema = z.object({
   webSearch: z.boolean(),
   version: z.string(),
   auth: HealthAuthSchema.optional(),
+  /** Which models run which tier (live mode). */
+  models: z
+    .object({
+      judge: z.string(),
+      fast: z.string().optional(),
+      search: z.string().optional(),
+      failover: z.string().optional(),
+    })
+    .optional(),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
 

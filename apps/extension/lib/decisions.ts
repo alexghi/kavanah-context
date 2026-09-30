@@ -6,8 +6,8 @@ import {
   type EngagementRecommendation,
   type EvidenceItem,
   type Source,
+  type Tone,
 } from "@kavannah/shared";
-import type { Tone } from "./labels";
 
 /** The three decisions shown as collapsed sections; each header carries its verdict. */
 
@@ -31,8 +31,8 @@ export function disinfoVerdict(classification: Classification, evidence: Evidenc
 
   if (score >= 75) return { label: band.label, tone: "critical" };
   if (score >= 25) {
-    if (labels.has("misleading_framing") && !labels.has("misinformation")) return { label: "Missing context", tone: "caution" };
-    return { label: band.label, tone: "caution" };
+    if (labels.has("misleading_framing") && !labels.has("misinformation")) return { label: "Missing context", tone: band.tone };
+    return { label: band.label, tone: band.tone };
   }
 
   const opinion = labels.has("opinion") || labels.has("political_or_historical_argument");

@@ -1,5 +1,5 @@
 import { useCallback, useReducer, useRef } from "react";
-import type { AnalyzePostResponse, DraftKind, DraftResponse, PostContext } from "@kavannah/shared";
+import type { AnalysisProgress, AnalyzePostResponse, DraftKind, DraftResponse, PostContext } from "@kavannah/shared";
 import type { AnalysisClient } from "@/lib/api";
 
 /**
@@ -22,7 +22,7 @@ export type DraftStates = Record<DraftKind, DraftState>;
 
 export type AnalysisState =
   | { status: "idle"; post: null }
-  | { status: "loading"; post: PostContext; requestId: number; startedAt: number; attempt: number }
+  | { status: "loading"; post: PostContext; requestId: number; startedAt: number; attempt: number; progress?: AnalysisProgress }
   | {
       status: "result";
       post: PostContext;
@@ -35,6 +35,7 @@ export type AnalysisState =
 
 export type AnalysisAction =
   | { type: "start"; post: PostContext; requestId: number; startedAt: number; attempt: number }
+  | { type: "progress"; requestId: number; progress: AnalysisProgress }
   | { type: "succeed"; requestId: number; analysis: AnalyzePostResponse; receivedAt: number }
   | { type: "fail"; requestId: number; error: ErrorInfo }
   | { type: "draft/start"; kind: DraftKind; requestId: number }
@@ -59,6 +60,9 @@ export function analysisReducer(state: AnalysisState, action: AnalysisAction): A
         startedAt: action.startedAt,
         attempt: action.attempt,
       };
+    case "progress":
+      if (state.status !== "loading" || state.requestId !== action.requestId) return state; // stale
+      return { ...state, progress: action.progress };
     case "succeed":
       if (state.status !== "loading" || state.requestId !== action.requestId) return state; // stale
       return {
@@ -151,7 +155,9 @@ export function useAnalysis(client: AnalysisClient): UseAnalysis {
       inFlightUrl.current = post.url;
       const attempt = samePost && current.status !== "idle" ? current.attempt + 1 : 1;
       dispatch({ type: "start", post, requestId, startedAt: Date.now(), attempt });
-      const response = await client.analyze(post, options.refresh ? { refresh: true } : undefined);
+      const response = await client.analyze(post, options.refresh ? { refresh: true } : undefined, (progress) =>
+        dispatch({ type: "progress", requestId, progress }),
+      );
       if (counter.current === requestId) inFlightUrl.current = null;
       if (response.ok) dispatch({ type: "succeed", requestId, analysis: response.data, receivedAt: Date.now() });
       else dispatch({ type: "fail", requestId, error: response.error });

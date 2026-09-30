@@ -4,35 +4,56 @@
  * Kavannah design tokens (shadcn-style). Declared on :root (popup / options documents) and on
  * :host (the content-script shadow root; WXT also rewrites :root to :host there). The panel root
  * can force a theme with data-theme so the drawer follows X's own light/dark setting.
+ *
+ * Contrast rules (WCAG 2.2 AA, enforced by the e2e contrast audit, e2e/contrast.mjs):
+ * - Text uses foreground, muted-foreground, link, accent-foreground or a tone's "-strong" shade.
+ *   Each stays >= 6:1 on the card, the page ground, muted surfaces and its own "-soft" tint.
+ * - A tone's base colour (--critical, --warning, ...) is a fill for bars, dots and icons
+ *   (>= 3:1 against the card); never use it for text.
+ * - "-soft" tints are backgrounds; "-line" shades are borders of tinted chips and boxes.
+ * Tones: critical (red), warning (orange), caution (amber), positive (green), neutral (grey).
  */
 :root,
 :host,
 .kavannah-root[data-theme="light"] {
   color-scheme: light;
-  --background: #ffffff;
+  --background: #f4f4f6;
   --foreground: #18181b;
   --card: #ffffff;
   --card-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --border: #e4e4e7;
-  --input: #d4d4d8;
+  --muted: #ececf0;
+  --muted-foreground: #52525b;
+  --border: #dcdce2;
+  --input: #8a8a94;
   --ring: #4f46e5;
   --primary: #4f46e5;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --link: #4338ca;
+  --secondary: #ececf0;
   --secondary-foreground: #18181b;
   --accent: #eef2ff;
   --accent-foreground: #3730a3;
-  --positive: #059669;
-  --positive-soft: #ecfdf5;
-  --caution: #d97706;
-  --caution-soft: #fffbeb;
   --critical: #e11d48;
+  --critical-strong: #b1123a;
   --critical-soft: #fff1f2;
-  --neutral: #52525b;
+  --critical-line: #fda4af;
+  --warning: #ea580c;
+  --warning-strong: #a8380d;
+  --warning-soft: #fff7ed;
+  --warning-line: #fdba74;
+  --caution: #d97706;
+  --caution-strong: #92400e;
+  --caution-soft: #fffbeb;
+  --caution-line: #fcd34d;
+  --positive: #059669;
+  --positive-strong: #046c50;
+  --positive-soft: #ecfdf5;
+  --positive-line: #6ee7b7;
+  --neutral: #71717a;
+  --neutral-strong: #3f3f46;
   --neutral-soft: #f4f4f5;
-  --drawer-shadow: -12px 0 40px rgba(24, 24, 27, 0.14);
+  --neutral-line: #d4d4d8;
+  --drawer-shadow: -12px 0 40px rgba(24, 24, 27, 0.16);
   --radius: 12px;
 }
 
@@ -42,27 +63,40 @@
     color-scheme: dark;
     --background: #09090b;
     --foreground: #fafafa;
-    --card: #131316;
+    --card: #16161a;
     --card-foreground: #fafafa;
-    --muted: #1f1f23;
-    --muted-foreground: #a1a1aa;
-    --border: #27272a;
-    --input: #3f3f46;
+    --muted: #232328;
+    --muted-foreground: #a8a8b3;
+    --border: #2e2e35;
+    --input: #6b6b76;
     --ring: #818cf8;
-    --primary: #6366f1;
+    --primary: #4f46e5;
     --primary-foreground: #ffffff;
-    --secondary: #27272a;
+    --link: #a5b4fc;
+    --secondary: #27272c;
     --secondary-foreground: #fafafa;
     --accent: #1e1b4b;
     --accent-foreground: #c7d2fe;
-    --positive: #34d399;
-    --positive-soft: rgba(16, 185, 129, 0.14);
-    --caution: #fbbf24;
+    --critical: #f43f5e;
+    --critical-strong: #fda4af;
+    --critical-soft: rgba(244, 63, 94, 0.16);
+    --critical-line: rgba(244, 63, 94, 0.5);
+    --warning: #f97316;
+    --warning-strong: #fdba74;
+    --warning-soft: rgba(249, 115, 22, 0.15);
+    --warning-line: rgba(249, 115, 22, 0.5);
+    --caution: #f59e0b;
+    --caution-strong: #fcd34d;
     --caution-soft: rgba(245, 158, 11, 0.14);
-    --critical: #fb7185;
-    --critical-soft: rgba(244, 63, 94, 0.14);
+    --caution-line: rgba(245, 158, 11, 0.5);
+    --positive: #10b981;
+    --positive-strong: #6ee7b7;
+    --positive-soft: rgba(16, 185, 129, 0.14);
+    --positive-line: rgba(16, 185, 129, 0.5);
     --neutral: #a1a1aa;
-    --neutral-soft: #27272a;
+    --neutral-strong: #e4e4e7;
+    --neutral-soft: #26262b;
+    --neutral-line: #3f3f46;
     --drawer-shadow: -12px 0 40px rgba(0, 0, 0, 0.55);
   }
 }
@@ -71,27 +105,40 @@
   color-scheme: dark;
   --background: #09090b;
   --foreground: #fafafa;
-  --card: #131316;
+  --card: #16161a;
   --card-foreground: #fafafa;
-  --muted: #1f1f23;
-  --muted-foreground: #a1a1aa;
-  --border: #27272a;
-  --input: #3f3f46;
+  --muted: #232328;
+  --muted-foreground: #a8a8b3;
+  --border: #2e2e35;
+  --input: #6b6b76;
   --ring: #818cf8;
-  --primary: #6366f1;
+  --primary: #4f46e5;
   --primary-foreground: #ffffff;
-  --secondary: #27272a;
+  --link: #a5b4fc;
+  --secondary: #27272c;
   --secondary-foreground: #fafafa;
   --accent: #1e1b4b;
   --accent-foreground: #c7d2fe;
-  --positive: #34d399;
-  --positive-soft: rgba(16, 185, 129, 0.14);
-  --caution: #fbbf24;
+  --critical: #f43f5e;
+  --critical-strong: #fda4af;
+  --critical-soft: rgba(244, 63, 94, 0.16);
+  --critical-line: rgba(244, 63, 94, 0.5);
+  --warning: #f97316;
+  --warning-strong: #fdba74;
+  --warning-soft: rgba(249, 115, 22, 0.15);
+  --warning-line: rgba(249, 115, 22, 0.5);
+  --caution: #f59e0b;
+  --caution-strong: #fcd34d;
   --caution-soft: rgba(245, 158, 11, 0.14);
-  --critical: #fb7185;
-  --critical-soft: rgba(244, 63, 94, 0.14);
+  --caution-line: rgba(245, 158, 11, 0.5);
+  --positive: #10b981;
+  --positive-strong: #6ee7b7;
+  --positive-soft: rgba(16, 185, 129, 0.14);
+  --positive-line: rgba(16, 185, 129, 0.5);
   --neutral: #a1a1aa;
-  --neutral-soft: #27272a;
+  --neutral-strong: #e4e4e7;
+  --neutral-soft: #26262b;
+  --neutral-line: #3f3f46;
   --drawer-shadow: -12px 0 40px rgba(0, 0, 0, 0.55);
 }
 
@@ -107,18 +154,31 @@
   --color-ring: var(--ring);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-link: var(--link);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
-  --color-positive: var(--positive);
-  --color-positive-soft: var(--positive-soft);
-  --color-caution: var(--caution);
-  --color-caution-soft: var(--caution-soft);
   --color-critical: var(--critical);
+  --color-critical-strong: var(--critical-strong);
   --color-critical-soft: var(--critical-soft);
+  --color-critical-line: var(--critical-line);
+  --color-warning: var(--warning);
+  --color-warning-strong: var(--warning-strong);
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
+  --color-caution: var(--caution);
+  --color-caution-strong: var(--caution-strong);
+  --color-caution-soft: var(--caution-soft);
+  --color-caution-line: var(--caution-line);
+  --color-positive: var(--positive);
+  --color-positive-strong: var(--positive-strong);
+  --color-positive-soft: var(--positive-soft);
+  --color-positive-line: var(--positive-line);
   --color-neutral: var(--neutral);
+  --color-neutral-strong: var(--neutral-strong);
   --color-neutral-soft: var(--neutral-soft);
+  --color-neutral-line: var(--neutral-line);
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
@@ -165,8 +225,8 @@
 }
 
 @utility section-label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted-foreground);

@@ -1,46 +1,15 @@
-import type { AntisemitismCategory, Confidence, ContentLabel, EvidenceVerdict } from "@kavannah/shared";
+import {
+  ANTISEMITISM_CATEGORIES,
+  CONTENT_LABELS,
+  EVIDENCE_VERDICTS,
+  VERDICT_ORDER,
+  type AntisemitismCategory,
+  type ContentLabel,
+  type EvidenceItem,
+  type EvidenceVerdict,
+} from "@kavannah/shared";
 
-/** Human wording for enum values coming from the shared contract. */
-
-export const CONTENT_LABEL_TEXT: Record<ContentLabel, string> = {
-  factual_claim: "Factual claim",
-  opinion: "Opinion",
-  political_or_historical_argument: "Political or historical argument",
-  potentially_antisemitic: "Potentially antisemitic",
-  misinformation: "Misinformation",
-  misleading_framing: "Misleading framing",
-  unverifiable_claim: "Unverifiable claim",
-  benign: "Benign",
-};
-
-export const VERDICT_TEXT: Record<EvidenceVerdict, string> = {
-  supported: "Supported",
-  contradicted: "Contradicted",
-  partially_supported: "Partially supported",
-  insufficient_evidence: "Insufficient evidence",
-  not_a_factual_claim: "Not a factual claim",
-};
-
-export const ANTISEMITISM_CATEGORY_TEXT: Record<AntisemitismCategory, string> = {
-  conspiracy_or_control: "conspiracy or control tropes",
-  dehumanising_or_threatening: "dehumanising or threatening language",
-  holocaust_denial_or_distortion: "Holocaust denial or distortion",
-  israel_related: "Israel-related",
-  classic_tropes: "classic tropes",
-  incitement_to_violence: "incitement to violence",
-};
-
-export const CONFIDENCE_TEXT: Record<Confidence, string> = { low: "low", medium: "medium", high: "high" };
-
-export type Tone = "positive" | "caution" | "critical" | "neutral";
-
-export const VERDICT_TONE: Record<EvidenceVerdict, Tone> = {
-  supported: "positive",
-  contradicted: "critical",
-  partially_supported: "caution",
-  insufficient_evidence: "neutral",
-  not_a_factual_claim: "neutral",
-};
+/** Human wording for enum values coming from the shared contract (definitions: @kavannah/shared explain.ts). */
 
 /** `snake_case_value` -> "Snake case value" (fallback for values the maps don't know). */
 export function humanize(value: string): string {
@@ -49,15 +18,22 @@ export function humanize(value: string): string {
 }
 
 export function contentLabelText(label: ContentLabel): string {
-  return CONTENT_LABEL_TEXT[label] ?? humanize(label);
+  return CONTENT_LABELS[label]?.label ?? humanize(label);
 }
 
 export function verdictText(verdict: EvidenceVerdict): string {
-  return VERDICT_TEXT[verdict] ?? humanize(verdict);
+  return EVIDENCE_VERDICTS[verdict]?.label ?? humanize(verdict);
 }
 
 export function antisemitismCategoryText(category: AntisemitismCategory): string {
-  return ANTISEMITISM_CATEGORY_TEXT[category] ?? humanize(category).toLowerCase();
+  return ANTISEMITISM_CATEGORIES[category]?.label ?? humanize(category);
+}
+
+/** Verdict counts, most serious first: [{ verdict: "contradicted", count: 2 }, …]. */
+export function verdictCounts(evidence: readonly EvidenceItem[]): Array<{ verdict: EvidenceVerdict; count: number }> {
+  const counts = new Map<EvidenceVerdict, number>();
+  for (const item of evidence) counts.set(item.verdict, (counts.get(item.verdict) ?? 0) + 1);
+  return VERDICT_ORDER.filter((verdict) => counts.has(verdict)).map((verdict) => ({ verdict, count: counts.get(verdict)! }));
 }
 
 /** "a", "a and b", "a, b and c" */

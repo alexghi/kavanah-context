@@ -12,7 +12,7 @@ export const buttonVariants = cva(
         outline: "border border-border bg-background text-foreground hover:bg-muted",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80",
         ghost: "text-foreground hover:bg-muted",
-        link: "text-primary underline-offset-4 hover:underline",
+        link: "text-link underline-offset-4 hover:underline",
       },
       size: {
         default: "h-9 px-3.5",

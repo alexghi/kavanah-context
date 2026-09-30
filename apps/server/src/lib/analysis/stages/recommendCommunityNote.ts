@@ -1,4 +1,4 @@
-import type { Claim, Classification, CommunityNote, EvidenceItem, PostContext } from "@kavannah/shared";
+import type { Claim, Classification, CommunityNote, EvidenceItem, IhraAssessment, PostContext } from "@kavannah/shared";
 import type { ModelProvider, ModelResult } from "../../ai/provider.js";
 import { recommendCommunityNotePrompt } from "../prompts.js";
 import { CommunityNoteOutputSchema, type CommunityNoteOutput } from "../schemas.js";
@@ -11,11 +11,12 @@ export function recommendCommunityNote(
   claims: Claim[],
   evidence: EvidenceItem[],
   evidenceStatus: string,
+  ihra?: IhraAssessment,
 ): Promise<ModelResult<CommunityNoteOutput>> {
   return provider.structured({
     stage: "recommendCommunityNote",
     system: recommendCommunityNotePrompt.system,
-    user: recommendCommunityNotePrompt.user(post, classification, claims, evidence, evidenceStatus),
+    user: recommendCommunityNotePrompt.user(post, classification, claims, evidence, evidenceStatus, ihra),
     schema: CommunityNoteOutputSchema,
   });
 }

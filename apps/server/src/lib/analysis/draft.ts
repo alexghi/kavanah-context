@@ -29,14 +29,14 @@ export const DRAFT_WARNINGS = {
 
 const URL_RE = /https?:\/\/[^\s<>()"'\]]+/g;
 
-/** All sources referenced by the analysis, deduped by id (verified first). */
+/** All sources referenced by the analysis (evidence and IHRA review), deduped by id (verified first). */
 export function collectAnalysisSources(analysis: AnalyzePostResponse): Source[] {
   const byId = new Map<string, Source>();
-  for (const item of analysis.evidence) {
-    for (const source of item.sources) {
-      if (!byId.has(source.id)) byId.set(source.id, source);
-    }
-  }
+  const add = (source: Source) => {
+    if (!byId.has(source.id)) byId.set(source.id, source);
+  };
+  for (const item of analysis.evidence) item.sources.forEach(add);
+  analysis.ihra?.sources.forEach(add);
   return [...byId.values()].sort((a, b) => Number(b.verified) - Number(a.verified));
 }
 

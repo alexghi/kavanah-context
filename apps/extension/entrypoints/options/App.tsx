@@ -175,7 +175,7 @@ export function App() {
           <span
             aria-live="polite"
             className={cn(
-              "ml-auto inline-flex items-center gap-1 text-[12px] text-positive transition-opacity",
+              "ml-auto inline-flex items-center gap-1 text-[12px] font-medium text-positive-strong transition-opacity",
               savedAt === null ? "opacity-0" : "opacity-100",
             )}
           >
@@ -225,7 +225,7 @@ export function App() {
                 </Button>
               </div>
               {urlError && (
-                <p id="backend-url-error" className="text-[12px] text-critical">
+                <p id="backend-url-error" className="text-[12px] font-medium text-critical-strong">
                   {urlError}
                 </p>
               )}
@@ -302,8 +302,16 @@ export function App() {
                   <AlertDescription>
                     {authStatus.problem ? "Server reached, but analysis is locked: " : "Connected. "}
                     <strong>{authStatus.text}</strong> · Mode: <strong>{health.health.mode}</strong> · Model:{" "}
-                    <strong>{health.health.model}</strong> · Web search: <strong>{health.health.webSearch ? "on" : "off"}</strong> ·
-                    Server v{health.health.version}
+                    <strong>{health.health.model}</strong>
+                    {health.health.models?.fast && (
+                      <>
+                        {" "}
+                        (fast tier: <strong>{health.health.models.fast}</strong>
+                        {health.health.models.search ? <>, search: <strong>{health.health.models.search}</strong></> : null}
+                        {health.health.models.failover ? <>, failover: <strong>{health.health.models.failover}</strong></> : null})
+                      </>
+                    )}{" "}
+                    · Web search: <strong>{health.health.webSearch ? "on" : "off"}</strong> · Server v{health.health.version}
                   </AlertDescription>
                 </Alert>
               )}
@@ -333,7 +341,7 @@ export function App() {
                       {domain}
                       <button
                         type="button"
-                        className="inline-flex cursor-pointer rounded-sm text-muted-foreground hover:text-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex cursor-pointer rounded-sm text-muted-foreground hover:text-critical-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         aria-label={`Remove ${domain}`}
                         onClick={() => removeDomain(domain)}
                       >
@@ -366,7 +374,7 @@ export function App() {
                 </Button>
               </div>
               {domainError && (
-                <p id="trusted-domain-error" className="text-[12px] text-critical">
+                <p id="trusted-domain-error" className="text-[12px] font-medium text-critical-strong">
                   {domainError}
                 </p>
               )}

@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { ChevronDown, ExternalLink, TriangleAlert } from "lucide-react";
-import type { EvidenceItem, Source } from "@kavannah/shared";
-import { hostOf, VERDICT_TONE, verdictText, type Tone } from "@/lib/labels";
+import { ChevronDown, ExternalLink } from "lucide-react";
+import { EVIDENCE_VERDICTS, SOURCES_EXPLAINER, UNVERIFIED_LINK_EXPLAINER, type EvidenceItem, type Source } from "@kavannah/shared";
+import { hostOf, verdictCounts, verdictText } from "@/lib/labels";
 import { cn } from "@/lib/utils";
-import { Badge } from "./ui/badge";
+import { GroupTitle } from "./SubSection";
+import { ToneBadge } from "./ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
-const TONE_BADGE: Record<Tone, "positive" | "caution" | "critical" | "neutral"> = {
-  positive: "positive",
-  caution: "caution",
-  critical: "critical",
-  neutral: "neutral",
-};
-
 export function SourceItem({ source, compact = false }: { source: Source; compact?: boolean }) {
+  const unverified = source.verified === false;
   return (
     <li className={cn("leading-5", compact ? "text-[12px]" : "text-[12.5px]")}>
       <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
@@ -21,75 +16,99 @@ export function SourceItem({ source, compact = false }: { source: Source; compac
           href={source.url}
           target="_blank"
           rel="noreferrer noopener"
-          className="rounded-sm underline decoration-border underline-offset-2 hover:text-primary hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="rounded-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="font-semibold text-foreground">{source.publisher ?? hostOf(source.url)}</span>{" "}
-          <span className="text-foreground/90">{source.title}</span>
-          <ExternalLink className="ml-1 inline size-3 align-[-1px] text-muted-foreground" aria-hidden="true" />
+          <span className="font-semibold">{source.publisher ?? hostOf(source.url)}</span> <span>{source.title}</span>
+          <ExternalLink className="ml-1 inline size-3 align-[-1px]" aria-hidden="true" />
           <span className="sr-only-text">(opens in a new tab)</span>
         </a>
-        {source.verified === false && (
-          <Badge variant="caution" title="Kavannah could not confirm that this link resolves">
-            <TriangleAlert aria-hidden="true" />
+        {unverified && (
+          <ToneBadge tone="caution" title={UNVERIFIED_LINK_EXPLAINER}>
             Unverified link
-          </Badge>
+          </ToneBadge>
         )}
       </div>
       {source.whyItMatters && !compact && (
         <p className="text-muted-foreground">
-          <span className="font-medium text-foreground/80">Why it matters:</span> {source.whyItMatters}
+          <span className="font-semibold text-foreground">Why it matters:</span> {source.whyItMatters}
         </p>
       )}
+      {unverified && !compact && <p className="text-[12px] text-muted-foreground">{UNVERIFIED_LINK_EXPLAINER}</p>}
     </li>
   );
 }
 
 function EvidenceClaim({ item }: { item: EvidenceItem }) {
+  const verdict = EVIDENCE_VERDICTS[item.verdict];
   return (
     <li className="rounded-md border border-border bg-background p-3">
-      <Badge variant={TONE_BADGE[VERDICT_TONE[item.verdict]]}>{verdictText(item.verdict)}</Badge>
-      <p className="mt-1.5 text-[13px] font-medium leading-5 text-foreground">{item.claim}</p>
-      <p className="mt-1 text-[12.5px] leading-5 text-muted-foreground">{item.summary}</p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <ToneBadge tone={verdict?.tone ?? "neutral"}>{verdictText(item.verdict)}</ToneBadge>
+        {verdict && <span className="text-[12px] leading-5 text-muted-foreground">{verdict.definition}</span>}
+      </div>
+      <p className="mt-2 border-l-2 border-input pl-2.5 text-[13px] font-medium leading-5 text-foreground">{item.claim}</p>
+      <p className="mt-1.5 text-[12.5px] leading-5 text-foreground">{item.summary}</p>
       {item.sources.length === 0 ? (
         <p className="mt-2 text-[12px] italic text-muted-foreground">No sources could be retrieved for this claim.</p>
       ) : (
-        <ul className="mt-2 space-y-2 border-t border-border pt-2">
-          {item.sources.map((source) => (
-            <SourceItem key={source.id} source={source} />
-          ))}
-        </ul>
+        <div className="mt-2.5 border-t border-border pt-2.5">
+          <GroupTitle>{item.sources.length === 1 ? "Source" : "Sources"}</GroupTitle>
+          <ul className="mt-1 space-y-2">
+            {item.sources.map((source) => (
+              <SourceItem key={source.id} source={source} />
+            ))}
+          </ul>
+        </div>
       )}
     </li>
   );
 }
 
+/** Verdict summary (always visible) and the per-claim evidence behind a disclosure. */
 export function EvidenceList({ evidence }: { evidence: EvidenceItem[] }) {
   const [open, setOpen] = useState(false);
   if (evidence.length === 0) {
-    return <p className="text-[12px] text-muted-foreground">No check-worthy factual claims were identified, so no evidence was retrieved.</p>;
+    return (
+      <p className="text-[12.5px] leading-5 text-muted-foreground">
+        No check-worthy factual claims were identified, so no evidence was retrieved.
+      </p>
+    );
   }
   const count = evidence.length;
   return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-[12.5px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {open ? "Hide evidence" : "View evidence →"}
-          <span className="font-normal text-muted-foreground">
-            ({count} {count === 1 ? "claim" : "claims"})
-          </span>
-          <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent>
-        <ul className="mt-3 space-y-3">
-          {evidence.map((item) => (
-            <EvidenceClaim key={item.claimId} item={item} />
-          ))}
-        </ul>
-      </CollapsibleContent>
-    </Collapsible>
+    <div>
+      <p className="text-[12.5px] leading-5 text-foreground">
+        {count} {count === 1 ? "claim was" : "claims were"} checked against sources:
+      </p>
+      <ul className="mt-1.5 flex flex-wrap gap-1.5" aria-label="Verdicts">
+        {verdictCounts(evidence).map(({ verdict, count: n }) => (
+          <li key={verdict}>
+            <ToneBadge tone={EVIDENCE_VERDICTS[verdict]?.tone ?? "neutral"}>{`${verdictText(verdict)} (${n})`}</ToneBadge>
+          </li>
+        ))}
+      </ul>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="mt-2.5 inline-flex cursor-pointer items-center gap-1 rounded-sm text-[12.5px] font-semibold text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {open ? "Hide evidence" : "View evidence"}
+            <span className="font-normal text-muted-foreground">
+              ({count} {count === 1 ? "claim" : "claims"})
+            </span>
+            <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden="true" />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul className="mt-3 space-y-3" aria-label="Checked claims">
+            {evidence.map((item) => (
+              <EvidenceClaim key={item.claimId} item={item} />
+            ))}
+          </ul>
+          <p className="mt-2.5 text-[12px] leading-5 text-muted-foreground">{SOURCES_EXPLAINER}</p>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }

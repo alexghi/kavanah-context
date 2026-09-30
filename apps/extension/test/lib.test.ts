@@ -33,7 +33,7 @@ describe("decision verdicts", () => {
 
   it("turns the classification into a one-glance disinformation verdict", () => {
     expect(disinfoVerdict(classify(90, ["misinformation"]), evidence)).toEqual({ label: "Likely misleading", tone: "critical" });
-    expect(disinfoVerdict(classify(62, ["factual_claim", "misleading_framing"]), evidence)).toEqual({ label: "Missing context", tone: "caution" });
+    expect(disinfoVerdict(classify(62, ["factual_claim", "misleading_framing"]), evidence)).toEqual({ label: "Missing context", tone: "warning" });
     expect(disinfoVerdict(classify(62, ["misinformation", "misleading_framing"]), evidence).label).toBe("Potentially misleading");
     expect(disinfoVerdict(classify(30, ["unverifiable_claim"]), evidence).label).toBe("Some concerns");
     expect(disinfoVerdict(classify(5, ["opinion"]), [])).toEqual({ label: "Opinion", tone: "neutral" });

@@ -1,6 +1,6 @@
 import { createApp } from "./app.js";
 import { isLoopback, loadEnv, resolveConfig, startupBlocker } from "./config.js";
-import { AnthropicProvider } from "./lib/ai/anthropic.js";
+import { createRouter } from "./lib/ai/factory.js";
 import { ANALYSIS_CACHE_TTL_MS, TtlCache } from "./lib/cache.js";
 import { consoleLogger } from "./lib/log.js";
 import { PROMPT_VERSION } from "./lib/analysis/prompts.js";
@@ -17,10 +17,7 @@ if (blocker) {
   process.exit(1);
 }
 
-const provider =
-  config.mode === "live"
-    ? new AnthropicProvider({ model: config.model, effort: config.effort, webSearch: config.webSearchEnabled, log })
-    : null;
+const provider = config.mode === "live" ? createRouter(config, process.env, log) : null;
 
 const app = createApp({ config, provider, cache: new TtlCache(ANALYSIS_CACHE_TTL_MS), log });
 
@@ -38,7 +35,8 @@ const server = app.listen(config.port, config.host, () => {
     "Kavannah server",
     `  listening    http://${config.host}:${config.port}${config.trustProxy ? " (behind a trusted proxy)" : ""}`,
     `  mode         ${modeLabel}`,
-    `  model        ${config.model} (effort: ${config.effort}, prompts ${PROMPT_VERSION})`,
+    `  effort       ${config.effort} (judge stages; extraction, research and recommendations run low), prompts ${PROMPT_VERSION}`,
+    ...(provider ? provider.describe() : [`  model        ${config.model}`]),
     `  web search   ${webSearch}`,
     `  API key      ${config.hasApiKey ? "set" : "not set"}`,
     `  access keys  ${keys}`,

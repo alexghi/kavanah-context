@@ -1,65 +1,88 @@
-import { useId } from "react";
-import { Sparkles } from "lucide-react";
-import { SCORE_DISCLAIMER, scoreBand, type Confidence, type ScoreBand } from "@kavannah/shared";
-import { CONFIDENCE_TEXT } from "@/lib/labels";
+import type { ReactNode } from "react";
+import { SCORE_BANDS, SCORE_DISCLAIMER, scoreBand } from "@kavannah/shared";
+import { TONE_CLASSES } from "@/lib/tone";
 import { cn } from "@/lib/utils";
+import { ToneBadge } from "./ui/badge";
 
-const BAR_CLASS: Record<ScoreBand["tone"], string> = {
-  neutral: "bg-neutral/70",
-  caution: "bg-caution/70",
-  warning: "bg-caution",
-  critical: "bg-critical",
-};
+/** Bands from 0 upwards, for the scale and its legend. */
+const BANDS_ASC = [...SCORE_BANDS].sort((a, b) => a.min - b.min);
 
-const TEXT_CLASS: Record<ScoreBand["tone"], string> = {
-  neutral: "text-neutral",
-  caution: "text-caution",
-  warning: "text-caution",
-  critical: "text-critical",
-};
+const clampScore = (score: number) => Math.max(0, Math.min(100, Math.round(score)));
 
-export function ScoreMeter({ score, confidence }: { score: number; confidence: Confidence }) {
-  const clamped = Math.max(0, Math.min(100, Math.round(score)));
+/**
+ * The score at a glance, shown whether its section is open or not: the number, its band as a
+ * chip and a four-band scale with a marker at the score. `aside` sits at the end of the first row.
+ * `hideBand` drops the chip when the caller already shows the same words next to it.
+ */
+export function ScoreSummary({ score, aside, hideBand = false }: { score: number; aside?: ReactNode; hideBand?: boolean }) {
+  const clamped = clampScore(score);
   const band = scoreBand(clamped);
-  const disclaimerId = useId();
 
   return (
-    <div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-baseline gap-2">
-          <span className={cn("text-[13px] font-semibold", TEXT_CLASS[band.tone])}>{band.label}</span>
-          <span className="tabular-nums text-[12px] text-muted-foreground">{clamped} / 100</span>
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <p className="flex items-baseline gap-1 leading-none" aria-hidden="true">
+          <span className="text-[26px] font-bold tabular-nums tracking-tight text-foreground">{clamped}</span>
+          <span className="text-[13px] font-medium text-muted-foreground">/ 100</span>
+        </p>
+        {!hideBand && <ToneBadge tone={band.tone}>{band.label}</ToneBadge>}
+        {aside && <span className="ml-auto inline-flex items-center gap-1.5">{aside}</span>}
+      </div>
+      <div className="relative py-1">
+        <div
+          role="meter"
+          aria-label="Disinformation score"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={clamped}
+          aria-valuetext={`${clamped} out of 100: ${band.label}`}
+          className="flex h-2.5 w-full gap-[3px]"
+        >
+          {BANDS_ASC.map((b) => (
+            <span
+              key={b.min}
+              className={cn("h-full rounded-full", b === band ? TONE_CLASSES[b.tone].fill : TONE_CLASSES[b.tone].track)}
+              style={{ flexGrow: b.max - b.min + 1, flexBasis: 0 }}
+            />
+          ))}
         </div>
         <span
-          tabIndex={0}
-          title={SCORE_DISCLAIMER}
-          aria-describedby={disclaimerId}
-          className="inline-flex cursor-help items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Sparkles className="size-3" aria-hidden="true" />
-          AI assessment
-        </span>
+          aria-hidden="true"
+          className="pointer-events-none absolute top-1/2 size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-card bg-foreground shadow-sm"
+          style={{ left: `${clamped}%` }}
+        />
       </div>
-      <div
-        role="meter"
-        aria-label="Disinformation score"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={clamped}
-        aria-valuetext={`${clamped} out of 100, ${band.label}`}
-        className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-muted"
-      >
-        <div className={cn("h-full rounded-full transition-[width] duration-500", BAR_CLASS[band.tone])} style={{ width: `${clamped}%` }} />
+    </div>
+  );
+}
+
+/** How to read the score: a legend with every band's range, and what this post's band means in words. */
+export function ScoreLegend({ score }: { score: number }) {
+  const band = scoreBand(clampScore(score));
+
+  return (
+    <div className="space-y-3">
+      <ul className="flex flex-wrap gap-x-3.5 gap-y-1" aria-label="Score bands">
+        {BANDS_ASC.map((b) => {
+          const active = b === band;
+          return (
+            <li
+              key={b.min}
+              className={cn("flex items-center gap-1.5 whitespace-nowrap text-[11.5px] leading-4", active ? "font-semibold text-foreground" : "text-muted-foreground")}
+            >
+              <span aria-hidden="true" className={cn("size-2.5 shrink-0 rounded-[3px]", TONE_CLASSES[b.tone].fill)} />
+              <span>
+                {b.label} <span className="tabular-nums">{b.min}–{b.max}</span>
+                {active && <span className="sr-only-text"> (this post)</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="space-y-1">
+        <p className="text-[12.5px] font-medium leading-5 text-foreground">{band.meaning}</p>
+        <p className="text-[12px] leading-5 text-muted-foreground">{SCORE_DISCLAIMER}</p>
       </div>
-      <div className="mt-1.5 flex items-center justify-between gap-2">
-        <p className="text-[11.5px] text-muted-foreground">Indicative, not a % of false content</p>
-        <span className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground">
-          Confidence: {CONFIDENCE_TEXT[confidence]}
-        </span>
-      </div>
-      <span id={disclaimerId} className="sr-only-text">
-        {SCORE_DISCLAIMER}
-      </span>
     </div>
   );
 }
