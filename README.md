@@ -133,7 +133,7 @@ x.com page ── content script ── background worker ── POST /api/analy
 - When search is unavailable or finds nothing, the evidence says so explicitly instead of guessing.
 - The two recommendations come from separate prompt stages that never see each other's answer.
 - Model refusals, invalid JSON, timeouts and rate limits degrade to "uncertain" with a visible warning.
-- The disinformation score is labelled as an indicative AI assessment and shown separately from confidence.
+- The manipulation score (shown under “Manipulation signals”) is labelled as an indicative AI assessment and shown separately from confidence.
 - The extension holds no AI key and no prompts, and only reads the DOM, calls the Kavannah server you configured
   and copies text. "Request a Community Note" opens the post's ••• menu, clicks X's own "Request Community Note"
   item and fills the form's explanation with the note draft. It presses X's submit button only when the

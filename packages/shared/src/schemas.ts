@@ -86,6 +86,21 @@ export const ContentLabelSchema = z.enum([
 export type ContentLabel = z.infer<typeof ContentLabelSchema>;
 
 /**
+ * How a post may mislead, whatever the factual verdict: techniques, not a truth value.
+ * Definitions: explain.ts (MANIPULATION_SIGNALS).
+ */
+export const ManipulationSignalSchema = z.enum([
+  "selective_framing",
+  "material_omission",
+  "semantic_manipulation",
+  "false_equivalence",
+  "decontextualization",
+  "narrative_distortion",
+  "source_distortion",
+]);
+export type ManipulationSignal = z.infer<typeof ManipulationSignalSchema>;
+
+/**
  * Summary categories of the first release. Still sent (derived from `patterns`, see
  * legacyCategoriesFor) so extension builds that predate the IHRA patterns keep validating.
  */
@@ -203,6 +218,8 @@ export const ClassificationSchema = z.object({
    * NOT a probability and NOT "percent of the post that is false".
    */
   disinformationScore: z.number().int().min(0).max(100),
+  /** Manipulation techniques found in the post (empty = none). Absent from servers that predate them. */
+  manipulationSignals: z.array(ManipulationSignalSchema).optional(),
   antisemitism: AntisemitismAssessmentSchema,
   /** Manipulation techniques the post uses. Absent on results from servers that predate this layer. */
   manipulation: ManipulationSchema.optional(),

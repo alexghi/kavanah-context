@@ -2,7 +2,7 @@ import { useId, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** One titled part of a result card ("Disinformation score", "Labels", …) with an optional status on the right. */
+/** One titled part of a result card ("Manipulation signals", "Labels", …) with an optional status on the right. */
 export function SubSection({
   icon: Icon,
   title,

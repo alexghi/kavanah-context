@@ -49,7 +49,7 @@ export type ScoreBand = {
   meaning: string;
 };
 
-/** Bands for the indicative disinformation score (highest first). Always presented as an AI estimate. */
+/** Bands for the indicative manipulation score (shown as "Manipulation signals") (highest first). Always presented as an AI estimate. */
 export const SCORE_BANDS: ScoreBand[] = [
   { min: 75, max: 100, label: "Likely misleading", tone: "critical", meaning: "The factual content is false or seriously misleading." },
   { min: 50, max: 74, label: "Potentially misleading", tone: "warning", meaning: "Significant parts of the factual content could mislead readers." },

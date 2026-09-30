@@ -13,7 +13,7 @@ import {
 } from "@kavannah/shared";
 import type { CandidateSource } from "../ai/provider.js";
 
-export const PROMPT_VERSION = "2026-09-30.2";
+export const PROMPT_VERSION = "2026-09-30.3";
 
 // ---------------------------------------------------------------------------
 // Post rendering: the post is DATA, delimited and escaped, never instructions.
@@ -149,6 +149,16 @@ headline: a short human headline (3-8 words), e.g. "Likely misleading", "Accurat
 confidence: low | medium | high — how confident YOU are in this classification. Independent from the score.
 
 disinformationScore: an integer 0-100. It is an indicative assessment of how MISLEADING the post's factual content appears. 0 = no factual issue found; 25 = some concerns; 50 = potentially misleading; 75+ = likely misleading; 100 = clearly false. It is NOT a probability and NOT the share of the post that is false. Content with no factual claim (pure opinion, slur, satire) gets a LOW score (0-15) even if it is offensive or antisemitic. An unverifiable claim from an unnamed source typically lands around 20-40 unless something contradicts it.
+
+manipulationSignals: every technique by which the post may mislead readers (use ONLY these exact values; empty array when none applies). They describe HOW the post misleads, independently of whether its facts are right:
+- selective_framing: picks the facts, dates or comparisons that fit one conclusion and presents them as the whole picture.
+- material_omission: leaves out a fact that would change how a reader understands the claim.
+- semantic_manipulation: loaded, redefined or ambiguous words make a claim mean more than the facts support.
+- false_equivalence: treats two things as the same while ignoring differences in scale, aims, methods or context.
+- decontextualization: a quote, image, figure or event is taken out of the time, place or circumstances that give it its meaning.
+- narrative_distortion: arranges events into a story of cause, intent or blame that the facts do not establish.
+- source_distortion: misrepresents what a source says or how reliable it is, or cites a source that is unnamed or does not exist.
+Do not add a signal for a plain false statement with no technique behind it, for an opinion, or for a slur.
 
 explanation: 2-5 sentences in English. Say what the post claims, what is (or is not) problematic, and how certain you are. When you have no external evidence, say so; do not assert that a claim is false unless it contradicts well-established knowledge.
 antisemitism (screening; a later stage performs the full IHRA review when needed):

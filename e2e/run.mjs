@@ -478,7 +478,7 @@ async function main() {
     await dialog.getByRole("heading", { name: resultHeading }).waitFor({ timeout: T.analysis });
   };
   const previewRegion = dialog.getByRole("region", { name: "Post being analyzed" });
-  // The three decisions are collapsed sections; the header button's name starts with "Disinfo:", "Engage:" or "Note:".
+  // The three decisions are collapsed sections; the header button's name starts with "Content & manipulation assessment:", "Engage:" or "Note:".
   const sectionHeader = (label) => dialog.getByRole("button", { name: new RegExp(`^${label}: `) });
   const openSection = async (label) => {
     const header = sectionHeader(label);
@@ -571,7 +571,7 @@ async function main() {
         loading = { caught: false, note: "result arrived before the loading state could be observed" };
       }
 
-      await dialog.getByRole("heading", { name: "Disinfo: Likely misleading" }).waitFor({ timeout: T.analysis });
+      await dialog.getByRole("heading", { name: "Content & manipulation assessment: False" }).waitFor({ timeout: T.analysis });
       const renderedAfterMs = Date.now() - clickedAt;
 
       // All three verdicts are readable without expanding anything.
@@ -579,17 +579,21 @@ async function main() {
       await dialog.getByRole("heading", { name: "Note: Recommended" }).waitFor({ timeout: T.short });
       await dialog.getByText("Demo", { exact: true }).waitFor({ timeout: T.short });
       await dialog.getByText(`Demo fixture: ${HERO_FIXTURE}`).waitFor({ timeout: T.short });
-      for (const label of ["Disinfo", "Engage", "Note"]) {
+      for (const label of ["Content & manipulation assessment", "Engage", "Note"]) {
         assert.equal(await sectionHeader(label).getAttribute("aria-expanded"), "false", `${label} section starts collapsed`);
       }
       assert.equal(await dialog.getByRole("textbox").count(), 0, "no draft is visible while the sections are collapsed");
 
-      // The score stays visible while the Disinfo section is collapsed.
-      const meter = dialog.getByRole("meter", { name: "Disinformation score" });
+      // The score stays visible while the assessment section is collapsed.
+      const meter = dialog.getByRole("meter", { name: "Manipulation score" });
       await meter.waitFor({ timeout: T.short });
       assert.equal(await meter.isVisible(), true, "score scale is visible while collapsed");
       assert.equal(await meter.getAttribute("aria-valuenow"), "90", "hero score is 90");
       await dialog.getByText("AI confidence:", { exact: true }).waitFor({ timeout: T.short });
+      // The factual verdict and the manipulation signals are two separate lines.
+      await dialog.getByText("Verdict:", { exact: true }).waitFor({ timeout: T.short });
+      await dialog.getByText("Manipulation signals:", { exact: true }).waitFor({ timeout: T.short });
+      assert.equal(await dialog.getByText("Narrative distortion", { exact: true }).first().isVisible(), true, "the hero post's signal shows while collapsed");
       await snap(dialog, "03a-panel-collapsed.png", entry);
 
       // The section labels are rendered uppercase (CSS text-transform).
@@ -598,8 +602,8 @@ async function main() {
       assert.equal(rendered.innerText, "ENGAGE");
       assert.equal(rendered.transform, "uppercase");
 
-      // Details live inside the Disinfo section; the score is still there once it is open.
-      await openSection("Disinfo");
+      // Details live inside the assessment section; the score is still there once it is open.
+      await openSection("Content & manipulation assessment");
       await dialog.getByRole("heading", { name: "False claim in an antisemitic conspiracy frame" }).waitFor({ timeout: T.short });
       assert.equal(await meter.isVisible(), true, "score scale is visible while expanded");
       await dialog.getByText("Key sources", { exact: true }).waitFor({ timeout: T.short });
@@ -630,7 +634,7 @@ async function main() {
     "03",
     "View evidence: claims with verdicts, sources whose publisher/title is the link",
     async (entry) => {
-      await openSection("Disinfo");
+      await openSection("Content & manipulation assessment");
       const toggle = dialog.getByRole("button", { name: /View evidence/ });
       const toggleText = (await toggle.innerText()).replace(/\s+/g, " ").trim();
       assert.match(toggleText, /\(2 claims\)/, `evidence toggle text: ${toggleText}`);
@@ -834,14 +838,14 @@ async function main() {
       await benign.scrollIntoViewIfNeeded();
       await openPanelFor(benign, "Note: Not recommended");
       await dialog.getByRole("heading", { name: "Engage: No" }).waitFor({ timeout: T.short });
-      for (const label of ["Disinfo", "Engage", "Note"]) {
+      for (const label of ["Content & manipulation assessment", "Engage", "Note"]) {
         assert.equal(await sectionHeader(label).getAttribute("aria-expanded"), "false", `${label} section is collapsed again for a new post`);
       }
-      assert.equal(await dialog.getByRole("meter", { name: "Disinformation score" }).getAttribute("aria-valuenow"), "2", "benign score is 2 (visible while collapsed)");
-      for (const label of ["Disinfo", "Engage", "Note"]) await openSection(label);
+      assert.equal(await dialog.getByRole("meter", { name: "Manipulation score" }).getAttribute("aria-valuenow"), "2", "benign score is 2 (visible while collapsed)");
+      for (const label of ["Content & manipulation assessment", "Engage", "Note"]) await openSection(label);
       await dialog.getByRole("heading", { name: "No clear factual issue identified" }).waitFor({ timeout: T.short });
       await dialog.getByText(`Demo fixture: ${BENIGN_FIXTURE}`).waitFor({ timeout: T.short });
-      assert.equal(await dialog.getByRole("meter", { name: "Disinformation score" }).getAttribute("aria-valuenow"), "2", "benign score is 2");
+      assert.equal(await dialog.getByRole("meter", { name: "Manipulation score" }).getAttribute("aria-valuenow"), "2", "benign score is 2");
       const preview = (await previewRegion.innerText()).replace(/\s+/g, " ");
       assert.match(preview, /Civic Notes/);
       assert.match(preview, /@civic_notes_eu/);
@@ -1005,7 +1009,7 @@ async function main() {
         record("popup: demo picker", scheme, await audit("document", popup));
         for (const fixture of fixtures) {
           await popup.getByRole("button", { name: new RegExp(`^${escapeRe(fixture.title)}`) }).click();
-          await popup.getByRole("heading", { name: /^Disinfo: / }).waitFor({ timeout: T.analysis });
+          await popup.getByRole("heading", { name: /^Content & manipulation assessment: / }).waitFor({ timeout: T.analysis });
           await expandAll(popup.locator(".kavannah-root").first());
           record(`popup: ${fixture.id}`, scheme, await audit("document", popup));
           if (fixture.id === HERO_FIXTURE) await snap(popup, `11-contrast-${scheme}.png`, entry, { fullPage: true });

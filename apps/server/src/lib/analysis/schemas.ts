@@ -7,6 +7,7 @@ import {
   EngagementRecommendationSchema,
   EvidenceVerdictSchema,
   IhraPatternSchema,
+  ManipulationSignalSchema,
 } from "@kavannah/shared";
 
 /**
@@ -33,6 +34,7 @@ export const ClassificationOutputSchema = z.object({
   explanation: z.string(),
   confidence: ConfidenceSchema,
   disinformationScore: z.number(),
+  manipulationSignals: z.array(ManipulationSignalSchema),
   antisemitism: z.object({
     assessment: z.enum(["not_detected", "possible", "likely"]),
     /** IHRA patterns the post plausibly includes (screening; the full review confirms them) */

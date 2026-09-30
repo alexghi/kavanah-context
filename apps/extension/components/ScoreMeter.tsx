@@ -31,7 +31,7 @@ export function ScoreSummary({ score, aside, hideBand = false }: { score: number
       <div className="relative py-1">
         <div
           role="meter"
-          aria-label="Disinformation score"
+          aria-label="Manipulation score"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={clamped}

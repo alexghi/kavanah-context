@@ -1,4 +1,4 @@
-import { FileSearch, Gauge, LoaderCircle, Megaphone, MessageSquareText, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
+import { FileSearch, Gauge, LoaderCircle, Megaphone, MessageSquareText, Scale, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
 import {
   ANTISEMITISM_LEVELS,
   CONFIDENCE_LEVELS,
@@ -13,7 +13,7 @@ import {
   type IhraAssessment,
 } from "@kavannah/shared";
 import { useArrival } from "@/hooks/useArrival";
-import { disinfoVerdict, keySources } from "@/lib/decisions";
+import { ASSESSMENT_LABEL, FACTUAL_VERDICTS, disinfoVerdict, keySources } from "@/lib/decisions";
 import { TONE_ICON } from "@/lib/tone";
 import { cn } from "@/lib/utils";
 import { AntisemitismDetails } from "./AntisemitismDetails";
@@ -22,6 +22,7 @@ import { EvidenceList, SourceItem } from "./EvidenceList";
 import { IhraReview } from "./IhraReview";
 import { LabelList } from "./LabelList";
 import { ManipulationDetails } from "./ManipulationDetails";
+import { ManipulationSignalList, VerdictAndSignals } from "./ManipulationSignals";
 import { ScoreLegend, ScoreSummary } from "./ScoreMeter";
 import { SectionLabel } from "./SectionLabel";
 import { GroupTitle, SubSection } from "./SubSection";
@@ -71,8 +72,9 @@ function Pending({ text }: { text: string }) {
 }
 
 /**
- * The collapsed section's frame with placeholders (header, then the score summary), shown from
- * the first moment until the classification arrives, so nothing moves when it lands.
+ * The collapsed section's frame with placeholders (header, then the verdict and signals lines
+ * and the score summary), shown from the first moment until the classification arrives, so
+ * nothing moves when it lands.
  */
 function AssessmentSkeleton() {
   return (
@@ -80,19 +82,26 @@ function AssessmentSkeleton() {
       <div className="flex items-center gap-2.5 px-4 py-3">
         <Skeleton className="size-8 rounded-full" />
         <div className="min-w-0 flex-1 space-y-1.5">
-          <SectionLabel>Disinfo</SectionLabel>
+          <SectionLabel>{ASSESSMENT_LABEL}</SectionLabel>
           <Skeleton className="h-4 w-2/5" />
         </div>
         <span className="sr-only-text">Assessment in progress</span>
       </div>
-      <div className="space-y-2 px-4 pb-3.5">
-        {/* The score out of 100, with the confidence chip on the right. */}
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-7 w-16" />
-          <Skeleton className="ml-auto h-5 w-32" />
+      <div className="space-y-2.5 px-4 pb-3.5">
+        {/* The "Verdict:" and "Manipulation signals:" lines. */}
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-5 w-2/3" />
         </div>
-        {/* The scale. */}
-        <Skeleton className="my-1 h-2.5 w-full rounded-full" />
+        <div className="space-y-2">
+          {/* The score out of 100, with the confidence chip on the right. */}
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-7 w-16" />
+            <Skeleton className="ml-auto h-5 w-32" />
+          </div>
+          {/* The scale. */}
+          <Skeleton className="my-1 h-2.5 w-full rounded-full" />
+        </div>
       </div>
     </Card>
   );
@@ -106,12 +115,13 @@ export interface AssessmentCardProps {
 }
 
 /**
- * The "Disinfo" decision. Always visible: the verdict, the score with its scale and the AI
- * confidence. Behind the disclosure: the headline, then one titled part per signal (score
- * legend, labels, manipulation, antisemitism, reasoning, evidence), each explained where it
- * appears. The frame is on screen from the start and settles in when the classification lands;
- * parts that are still being computed show a pending state, and each late part breathes once as it
- * arrives. Nothing inside the disclosure fades, since its content mounts again on every open.
+ * The content and manipulation assessment. Always visible: the factual verdict, the manipulation
+ * signals, the score with its scale and the AI confidence. Behind the disclosure: the headline,
+ * then one titled part per signal (verdict, manipulation signals with the score legend, labels,
+ * manipulation techniques, antisemitism, reasoning, evidence), each explained where it appears.
+ * The frame is on screen from the start and settles in when the classification lands; parts that
+ * are still being computed show a pending state, and each late part breathes once as it arrives.
+ * Nothing inside the disclosure fades, since its content mounts again on every open.
  */
 export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps) {
   const cardArrived = useArrival(view !== null);
@@ -127,16 +137,19 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
   const manipulationLevel = manipulation ? MANIPULATION_LEVELS[manipulation.level] : null;
   const verdict = disinfoVerdict(classification, evidence ?? []);
   const sources = keySources(evidence ?? []);
+  // Absent when the server predates the signals: say nothing, not "none detected".
+  const signals = classification.manipulationSignals;
   const confidenceText = `AI confidence: ${confidence.label}`;
 
   return (
     <DecisionSection
-      label="Disinfo"
+      label={ASSESSMENT_LABEL}
       verdict={verdict}
       status={{ Icon: TONE_ICON[verdict.tone], tone: verdict.tone }}
       metaText={flagged ? `${confidenceText}, antisemitism ${antisemitismLevel.label}` : confidenceText}
       summary={
         <div className="space-y-2.5">
+          <VerdictAndSignals verdict={verdict} signals={signals} />
           <ScoreSummary
             score={classification.disinformationScore}
             hideBand={scoreBand(classification.disinformationScore).label === verdict.label}
@@ -162,12 +175,19 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
       </div>
 
       <div className="divide-y divide-border border-t border-border">
+        <SubSection icon={Scale} title="Verdict" aside={<ToneBadge tone={verdict.tone}>{verdict.label}</ToneBadge>}>
+          <p className="text-[12.5px] leading-5 text-muted-foreground">{FACTUAL_VERDICTS[verdict.label]}</p>
+        </SubSection>
+
         <SubSection
           icon={Gauge}
-          title="Disinformation score"
+          title="Manipulation signals"
           aside={<span className="text-[11.5px] font-medium text-muted-foreground">AI estimate</span>}
         >
-          <ScoreLegend score={classification.disinformationScore} />
+          <div className="space-y-3.5">
+            {signals && <ManipulationSignalList signals={signals} />}
+            <ScoreLegend score={classification.disinformationScore} />
+          </div>
         </SubSection>
 
         <SubSection icon={Tags} title="Labels">
@@ -177,7 +197,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
         {manipulation && manipulationLevel && (
           <SubSection
             icon={Megaphone}
-            title="Manipulation"
+            title="Manipulation techniques"
             aside={<ToneBadge tone={manipulationLevel.tone}>{manipulationLevel.label}</ToneBadge>}
           >
             <ManipulationDetails manipulation={manipulation} />
@@ -211,7 +231,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
           </div>
         </SubSection>
 
-        <SubSection icon={MessageSquareText} title="Why this assessment">
+        <SubSection icon={MessageSquareText} title="How the post may mislead">
           <p className="text-[13px] leading-5 text-foreground">{classification.explanation}</p>
         </SubSection>
 
