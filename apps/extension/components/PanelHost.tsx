@@ -3,13 +3,13 @@ import type { PostContext } from "@kavannah/shared";
 import type { AnalysisClient } from "@/lib/api";
 import type { PanelStore } from "@/lib/panelStore";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
-import { KavannahPanel } from "./KavannahPanel";
+import { KavannahPanel, type NoteExplanation } from "./KavannahPanel";
 
 export interface PanelHostProps {
   store: PanelStore;
   client: AnalysisClient;
   onOpenSettings: () => void;
-  onRequestCommunityNote: (post: PostContext) => Promise<CommunityNoteMenuStatus>;
+  onRequestCommunityNote: (post: PostContext, explanation?: NoteExplanation) => Promise<CommunityNoteMenuStatus>;
 }
 
 /** Bridges the content script's panel store to the single drawer instance. */

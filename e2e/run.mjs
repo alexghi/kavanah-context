@@ -711,7 +711,7 @@ async function main() {
 
   await step(
     "05",
-    "Request a Community Note: X's ••• menu opens, the item is highlighted but never clicked, Escape closes it",
+    "Request a Community Note: X's request form opens with the edited note draft in it; nothing is sent unless the auto-send setting is on",
     async (entry) => {
       await openSection("Note");
       const request = dialog.getByRole("button", { name: "Request a Community Note" });
@@ -719,45 +719,69 @@ async function main() {
       const urlBefore = page.url();
       await request.click();
 
-      const menu = page.locator('[role="menu"]');
-      await menu.waitFor({ timeout: T.short });
-      const item = menu.locator('[role="menuitem"]').filter({ hasText: "Request Community Note" });
-      await waitUntil(async () => ((await item.getAttribute("class")) || "").includes("kavannah-menu-highlight"), { message: "menu item highlighted", timeout: T.short });
-      const itemStyle = await item.evaluate((el) => ({ outline: el.style.outline, boxShadow: el.style.boxShadow, borderRadius: el.style.borderRadius }));
-      assert.ok(/2px/.test(itemStyle.outline) && /solid/.test(itemStyle.outline), `highlight outline: ${itemStyle.outline}`); // Chromium serializes "<color> solid 2px"
-
-      const hint = page.locator("#kavannah-menu-hint");
-      await hint.waitFor({ timeout: T.short });
-      assert.equal((await hint.innerText()).trim(), "Kavannah: choose this to continue");
-      const feedback = dialog.getByRole("alert").filter({ hasText: /Highlighted “Request Community Note”/ });
+      // Kavannah chooses X's "Request Community Note" item and fills the form's explanation.
+      const form = page.locator('[role="dialog"].x-note-request');
+      await form.waitFor({ timeout: T.short });
+      const explanation = form.locator('textarea[name="NoteRequestExplanationFormTextInput"]');
+      await waitUntil(async () => (await explanation.inputValue()) === noteDraftText, { message: "X's explanation field holds the edited note draft", timeout: T.short });
+      const heroUrlRe = new RegExp(`^https://x\\.com/[^/]+/status/${HERO_ID}$`);
+      assert.match(await form.locator('input[name="NoteRequestFormTextInput"]').inputValue(), heroUrlRe, "the 'Link to an X post' field holds the post's URL");
+      assert.equal(await page.locator("#kavannah-form-hint").count(), 0, "no 'writing…' marker when the draft already exists");
+      const feedback = dialog.getByRole("alert").filter({ hasText: /Opened X's request form and filled in the explanation/ });
       await feedback.waitFor({ timeout: T.short });
+      assert.match(await feedback.innerText(), /Kavannah did not send anything/);
 
-      // Nothing was clicked and nothing navigated.
+      // Only that one item was chosen, nothing was sent and nothing navigated.
       await sleep(400); // give any accidental click/navigation a chance to show up
-      const fake = await page.evaluate(() => ({ opens: window.__xFake.opens, itemClicks: window.__xFake.itemClicks, navigations: window.__xFake.navigations }));
-      assert.equal(fake.itemClicks.length, 0, "no menu item was clicked");
+      const fake = await page.evaluate(() => ({ opens: window.__xFake.opens, itemClicks: window.__xFake.itemClicks, navigations: window.__xFake.navigations, requests: window.__xFake.requests }));
+      assert.deepEqual(fake.itemClicks, ["Request Community Note"], "only X's Request Community Note item was chosen");
+      assert.equal(fake.requests.length, 0, "the request was not sent");
       assert.equal(fake.navigations.length, 0, "no link was followed");
       assert.equal(page.url(), urlBefore, "no navigation");
-      assert.equal(await menu.count(), 1, "menu still open");
-
-      const itemBox = await item.boundingBox();
-      const hintBox = await hint.boundingBox();
-      const hintGapPx = itemBox && hintBox ? Math.round(itemBox.top - hintBox.bottom) : null;
-      const hintMisaligned = hintGapPx === null || hintGapPx < -4 || hintGapPx > 24 || Math.abs(hintBox.left - itemBox.left) > 40;
-      if (hintMisaligned) observe(`The "Kavannah: choose this to continue" label is not sitting right above the highlighted menu item (gap ${hintGapPx}px, left offset ${hintBox && itemBox ? Math.round(hintBox.left - itemBox.left) : "?"}px).`);
+      assert.equal(await form.count(), 1, "X's form stays open for the user to review");
       await snap(page, "06-request-note.png", entry);
 
       await page.keyboard.press("Escape");
-      await waitUntil(async () => (await menu.count()) === 0, { message: "menu closed after Escape", timeout: T.short });
-      await waitUntil(async () => (await hint.count()) === 0, { message: "hint removed after Escape", timeout: T.short });
+      await waitUntil(async () => (await form.count()) === 0, { message: "form closed after Escape", timeout: T.short });
       await sleep(350);
-      const panelOpenAfterEscape = await isPanelOpen();
-      if (!panelOpenAfterEscape) {
-        observe("Escape pressed while X's ••• menu is open closes the menu AND the Kavannah drawer at once (the drawer closes on Esc from anywhere on the page); the drawer has to be reopened with K, its analysis and drafts are kept.");
+      const reopen = async () => {
+        if (await isPanelOpen()) return;
         await openPanelFor(hero, "Engage: No");
         assert.ok(await dialog.getByRole("textbox", { name: "Community Note draft" }).count(), "note draft still there after reopening");
-      }
-      return { menuOpens: fake.opens, itemStyle, hintGapPx, panelOpenAfterEscape, item: (await item.count()) ? "still present" : "removed" };
+      };
+      const panelOpenAfterEscape = await isPanelOpen();
+      if (!panelOpenAfterEscape) observe("Escape pressed while X's request form is open closes the form AND the Kavannah drawer at once (the drawer closes on Esc from anywhere on the page); the drawer has to be reopened with K, its analysis and drafts are kept.");
+      await reopen();
+
+      // With "Send Community Note requests automatically" on, X's button is pressed too.
+      const settings = await context.newPage();
+      attachConsole(settings, "options");
+      await settings.goto(`chrome-extension://${extId}/options.html`);
+      const autoSend = settings.getByRole("switch", { name: "Send Community Note requests automatically" });
+      await autoSend.waitFor({ timeout: T.medium });
+      assert.equal(await autoSend.getAttribute("aria-checked"), "false", "auto-send is off by default");
+      await autoSend.click();
+      await waitUntil(async () => (await autoSend.getAttribute("aria-checked")) === "true", { message: "auto-send switch on", timeout: T.short });
+      await snap(settings, "06b-auto-send-setting.png", entry, { fullPage: true });
+
+      await page.bringToFront();
+      await openSection("Note");
+      await request.scrollIntoViewIfNeeded();
+      await request.click();
+      const sent = dialog.getByRole("alert").filter({ hasText: /Sent your request to X/ });
+      await sent.waitFor({ timeout: T.medium });
+      const requests = await page.evaluate(() => window.__xFake.requests);
+      assert.equal(requests.length, 1, "exactly one request was sent");
+      assert.equal(requests[0].explanation, noteDraftText, "the request carries the edited draft");
+      assert.match(requests[0].source, heroUrlRe, "the request carries the post's URL");
+      assert.equal(await form.count(), 0, "X closed the form after the request");
+
+      await settings.bringToFront();
+      await autoSend.click();
+      await waitUntil(async () => (await autoSend.getAttribute("aria-checked")) === "false", { message: "auto-send switch off again", timeout: T.short });
+      await settings.close();
+      await page.bringToFront();
+      return { menuOpens: fake.opens, panelOpenAfterEscape, autoSentRequests: requests.length };
     },
     { page },
   );
@@ -827,7 +851,36 @@ async function main() {
       assert.equal(engageDesc, 1);
       assert.equal(noteDesc, 1);
       await snap(dialog, "08-benign.png", entry);
-      return { engage: "Engage: No", communityNote: "Note: Not recommended" };
+
+      // No note draft exists for this post: "Request a Community Note" opens X's form at once and
+      // the explanation is written while it is open (a "writing…" marker shows meanwhile).
+      assert.equal(await dialog.getByRole("textbox", { name: "Community Note draft" }).count(), 0, "no note draft yet on the benign post");
+      const request = dialog.getByRole("button", { name: "Request a Community Note" });
+      await request.scrollIntoViewIfNeeded();
+      await request.click();
+      const form = page.locator('[role="dialog"].x-note-request');
+      await form.waitFor({ timeout: T.short });
+      const explanation = form.locator('textarea[name="NoteRequestExplanationFormTextInput"]');
+      let marker = { caught: false };
+      try {
+        const hint = page.locator("#kavannah-form-hint");
+        await hint.waitFor({ timeout: 1_000 });
+        marker = { caught: true, text: (await hint.innerText()).trim(), explanationWhileWriting: await explanation.inputValue() };
+        assert.equal(marker.text, "Kavannah is writing the explanation…");
+        assert.equal(marker.explanationWhileWriting, "", "the explanation is empty while the draft is being written");
+        await snap(page, "08a-request-writing.png", entry);
+      } catch (err) {
+        if (err && err.name === "AssertionError") throw err;
+        marker = { caught: false, note: "the draft arrived before the marker could be observed" };
+      }
+      const written = await waitUntil(async () => ((await explanation.inputValue()).trim() ? explanation.inputValue() : null), { message: "explanation filled once the draft is written", timeout: T.analysis });
+      assert.equal(await page.locator("#kavannah-form-hint").count(), 0, "marker removed once the explanation is filled");
+      assert.match(await form.locator('input[name="NoteRequestFormTextInput"]').inputValue(), new RegExp(`/status/${BENIGN_ID}$`), "the link field holds the benign post's URL");
+      assert.equal((await page.evaluate(() => window.__xFake.requests)).length, 1, "nothing new was sent (only the earlier auto-send request)");
+      await snap(page, "08c-request-filled.png", entry);
+      await page.keyboard.press("Escape");
+      await waitUntil(async () => (await form.count()) === 0, { message: "form closed after Escape", timeout: T.short });
+      return { engage: "Engage: No", communityNote: "Note: Not recommended", marker, explanationChars: written.length };
     },
     { page },
   );

@@ -53,6 +53,30 @@ function RequestFeedback({ request }: { request: NoteRequestState }) {
       </Alert>
     );
   }
+  if (request.status === "filled") {
+    return (
+      <Alert variant="positive">
+        <CircleCheck aria-hidden="true" />
+        <AlertDescription>
+          {request.submitted
+            ? "Sent your request to X with the note draft as the explanation."
+            : "Opened X's request form and filled in the explanation with the note draft. Review it and press “Agree & Request a note” on X — Kavannah did not send anything."}
+          {request.truncated && " The draft was longer than X allows, so it was cut to fit."}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (request.status === "not_offered" && request.reason === "no_form") {
+    return (
+      <Alert variant="warning">
+        <TriangleAlert aria-hidden="true" />
+        <AlertDescription>
+          X's request form didn't open, so nothing was filled in. Copy the draft and use “Request Community Note” in
+          the post's ••• menu.
+        </AlertDescription>
+      </Alert>
+    );
+  }
   if (request.status === "not_offered") {
     return (
       <Alert variant="info">
