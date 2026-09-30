@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CircleHelp, LoaderCircle, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
-import type { AnalysisMeta, PostContext } from "@kavannah/shared";
+import type { AnalysisMeta, DraftKind, PostContext } from "@kavannah/shared";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import type { AnalysisClient } from "@/lib/api";
+import { ALL_CLOSED, type DecisionId } from "@/lib/decisions";
 import type { HostTheme } from "@/lib/theme";
 import { cn, describeError, formatDuration } from "@/lib/utils";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
@@ -20,14 +21,16 @@ import { Skeleton } from "./ui/skeleton";
 import { SectionLabel } from "./SectionLabel";
 
 /** Stands in for a recommendation card until the analysis is complete. */
-function RecommendationPending({ question, text }: { question: string; text: string }) {
+function RecommendationPending({ label, text }: { label: string; text: string }) {
   return (
     <Card aria-busy="true">
-      <CardHeader className="gap-2 pb-4">
-        <SectionLabel>{question}</SectionLabel>
+      <CardHeader className="gap-2 px-4 py-3">
         <div className="flex items-center gap-2.5">
           <Skeleton className="size-8 rounded-full" />
-          <Skeleton className="h-4 w-2/5" />
+          <div className="flex-1 space-y-1.5">
+            <SectionLabel>{label}</SectionLabel>
+            <Skeleton className="h-4 w-2/5" />
+          </div>
         </div>
         <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
           <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
@@ -83,6 +86,9 @@ export function KavannahPanel({
   const [hidden, setHidden] = useState(isDrawer && !open);
   const [noteRequest, setNoteRequest] = useState<NoteRequestState>({ status: "idle" });
   const [guideOpen, setGuideOpen] = useState(false);
+  const [openSections, setOpenSections] = useState(ALL_CLOSED);
+  // Drafts already started automatically, so closing one and reopening its section doesn't regenerate it.
+  const autoDrafted = useRef(new Set<string>());
   const guideRef = useRef<HTMLElement>(null);
   const postUrl = post?.url ?? null;
 
@@ -92,6 +98,7 @@ export function KavannahPanel({
 
   useEffect(() => {
     setNoteRequest({ status: "idle" });
+    setOpenSections(ALL_CLOSED);
     const body = bodyRef.current;
     if (body && typeof body.scrollTo === "function") body.scrollTo({ top: 0 });
   }, [postUrl]);
@@ -127,6 +134,22 @@ export function KavannahPanel({
       setNoteRequest({ status: "error", message: describeError(err) });
     }
   };
+
+  // Opening a section whose answer is "yes" shows its draft straight away; otherwise the draft stays on demand.
+  const handleSectionChange = (id: DecisionId, sectionOpen: boolean) => {
+    setOpenSections((current) => ({ ...current, [id]: sectionOpen }));
+    if (!sectionOpen || id === "disinfo" || state.status !== "result") return;
+    const kind: DraftKind = id === "engage" ? "reply" : "community_note";
+    const recommended =
+      kind === "reply"
+        ? state.analysis.engagement.recommendation === "engage"
+        : state.analysis.communityNote.recommendation === "recommended";
+    const key = `${state.post.url}|${state.receivedAt}|${kind}`;
+    if (!recommended || state.drafts[kind].status !== "idle" || autoDrafted.current.has(key)) return;
+    autoDrafted.current.add(key);
+    void generateDraft(kind);
+  };
+  const disinfoSection = { open: openSections.disinfo, onOpenChange: (sectionOpen: boolean) => handleSectionChange("disinfo", sectionOpen) };
 
   const mode = state.status === "result" ? state.analysis.meta.mode : demo ? "mock" : null;
   const showsCurrent = post !== null && state.post?.url === post.url;
@@ -239,13 +262,13 @@ export function KavannahPanel({
         {post && showsCurrent && state.status === "loading" && state.progress && viewOfProgress(state.progress) && (
           <div className="space-y-3 p-4">
             <StageProgress compact startedAt={state.startedAt} mode={demo ? "mock" : null} phase={state.progress.phase} ihraPending={state.progress.ihraPending} />
-            <AssessmentCard view={viewOfProgress(state.progress)!} />
+            <AssessmentCard view={viewOfProgress(state.progress)!} {...disinfoSection} />
             <RecommendationPending
-              question="Should I engage?"
+              label="Engage"
               text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
             />
             <RecommendationPending
-              question="Should I add a Community Note?"
+              label="Note"
               text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
             />
           </div>
@@ -274,10 +297,12 @@ export function KavannahPanel({
 
         {hasResult && state.status === "result" && (
           <div className="space-y-3 p-4">
-            <AssessmentCard view={viewOfAnalysis(state.analysis)} />
+            <AssessmentCard view={viewOfAnalysis(state.analysis)} {...disinfoSection} />
             <EngageCard
               engagement={state.analysis.engagement}
               draft={state.drafts.reply}
+              open={openSections.engage}
+              onOpenChange={(sectionOpen) => handleSectionChange("engage", sectionOpen)}
               onPrepare={() => void generateDraft("reply")}
               onRegenerate={() => void generateDraft("reply", { regenerate: true })}
               onRetryDraft={() => void generateDraft("reply")}
@@ -289,6 +314,8 @@ export function KavannahPanel({
               communityNote={state.analysis.communityNote}
               draft={state.drafts.community_note}
               request={noteRequest}
+              open={openSections.note}
+              onOpenChange={(sectionOpen) => handleSectionChange("note", sectionOpen)}
               onPrepare={() => void generateDraft("community_note")}
               onRequest={() => void handleRequestNote()}
               onRegenerate={() => void generateDraft("community_note", { regenerate: true })}

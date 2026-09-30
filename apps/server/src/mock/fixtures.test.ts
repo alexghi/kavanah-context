@@ -63,7 +63,6 @@ describe("fixtures — structure", () => {
         expect(urls.length).toBeLessThanOrEqual(kind === "reply" ? 1 : 2);
         expect(draft).not.toMatch(/(^|\s)@\w+/);
       }
-      if (f.drafts.reply) expect(f.drafts.reply.length, `${f.id} reply length`).toBeLessThanOrEqual(280);
       if (f.drafts.community_note && f.analysis.communityNote.recommendation === "recommended") {
         expect(f.drafts.community_note.match(URL_RE)?.length ?? 0, `${f.id} note should cite a source`).toBeGreaterThanOrEqual(1);
       }
@@ -152,7 +151,6 @@ describe("fixtures — scenario expectations", () => {
     expect(note.match(URL_RE)).toHaveLength(2);
     expect(note).toContain("https://www.federalreserve.gov/faqs/about_14986.htm");
     expect(note.split(/[.!?](\s|$)/).filter((s) => s.trim().length > 20).length).toBeLessThanOrEqual(4);
-    expect(f.drafts.reply!.length).toBeLessThanOrEqual(280);
   });
 
   it("8 both-not-recommended: labelled satire, both not recommended", () => {

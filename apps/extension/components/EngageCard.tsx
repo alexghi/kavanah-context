@@ -1,16 +1,18 @@
 import { MessageSquare } from "lucide-react";
 import { ENGAGEMENT_COPY, type Engagement } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
+import { engageVerdict } from "@/lib/decisions";
+import { DecisionSection } from "./DecisionSection";
 import { DraftEditor } from "./DraftEditor";
-import { ENGAGE_STATUS, StatusMark } from "./RecommendationStatus";
-import { SectionLabel } from "./SectionLabel";
+import { ENGAGE_STATUS } from "./RecommendationStatus";
 import { GroupTitle } from "./SubSection";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 
 export interface EngageCardProps {
   engagement: Engagement;
   draft: DraftState;
+  open: boolean;
+  onOpenChange(open: boolean): void;
   onPrepare(): void;
   onRegenerate(): void;
   onRetryDraft(): void;
@@ -22,6 +24,8 @@ export interface EngageCardProps {
 export function EngageCard({
   engagement,
   draft,
+  open,
+  onOpenChange,
   onPrepare,
   onRegenerate,
   onRetryDraft,
@@ -33,19 +37,16 @@ export function EngageCard({
   const copy = ENGAGEMENT_COPY[recommendation];
 
   return (
-    <Card aria-labelledby="kavannah-engage-title">
-      <CardHeader className="pb-3">
-        <SectionLabel>Should I engage?</SectionLabel>
-        <div className="flex items-center gap-2.5">
-          <StatusMark status={ENGAGE_STATUS[recommendation]} />
-          <CardTitle id="kavannah-engage-title" className="text-[17px]">
-            {copy.title}
-          </CardTitle>
-        </div>
-        <CardDescription>{copy.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="border-t border-border pt-3">
+    <DecisionSection
+      label="Engage"
+      verdict={engageVerdict(recommendation)}
+      status={ENGAGE_STATUS[recommendation]}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <div className="space-y-3 p-4">
+        <p className="text-[12.5px] leading-5 text-muted-foreground">{copy.description}</p>
+        <div>
           <GroupTitle>Why</GroupTitle>
           <p className="mt-0.5 text-[13px] leading-5 text-foreground">{engagement.rationale}</p>
         </div>
@@ -65,7 +66,7 @@ export function EngageCard({
             onClose={onCloseDraft}
           />
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </DecisionSection>
   );
 }

@@ -10,13 +10,13 @@ import {
 import type { DraftState } from "@/hooks/useAnalysis";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 import { cn } from "@/lib/utils";
+import { noteVerdict } from "@/lib/decisions";
+import { DecisionSection } from "./DecisionSection";
 import { DraftEditor } from "./DraftEditor";
-import { NOTE_STATUS, StatusMark } from "./RecommendationStatus";
-import { SectionLabel } from "./SectionLabel";
+import { NOTE_STATUS } from "./RecommendationStatus";
 import { GroupTitle } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
 export type NoteRequestState =
@@ -29,6 +29,8 @@ export interface CommunityNoteCardProps {
   communityNote: CommunityNote;
   draft: DraftState;
   request: NoteRequestState;
+  open: boolean;
+  onOpenChange(open: boolean): void;
   onPrepare(): void;
   onRequest(): void;
   onRegenerate(): void;
@@ -82,6 +84,8 @@ export function CommunityNoteCard({
   communityNote,
   draft,
   request,
+  open,
+  onOpenChange,
   onPrepare,
   onRequest,
   onRegenerate,
@@ -96,19 +100,16 @@ export function CommunityNoteCard({
   const working = request.status === "working";
 
   return (
-    <Card aria-labelledby="kavannah-note-title">
-      <CardHeader className="pb-3">
-        <SectionLabel>Should I add a Community Note?</SectionLabel>
-        <div className="flex items-center gap-2.5">
-          <StatusMark status={NOTE_STATUS[recommendation]} />
-          <CardTitle id="kavannah-note-title" className="text-[17px]">
-            {copy.title}
-          </CardTitle>
-        </div>
-        <CardDescription>{copy.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="border-t border-border pt-3">
+    <DecisionSection
+      label="Note"
+      verdict={noteVerdict(recommendation)}
+      status={NOTE_STATUS[recommendation]}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <div className="space-y-3 p-4">
+        <p className="text-[12.5px] leading-5 text-muted-foreground">{copy.description}</p>
+        <div>
           <GroupTitle>Why</GroupTitle>
           <p className="mt-0.5 text-[13px] leading-5 text-foreground">{communityNote.rationale}</p>
         </div>
@@ -167,7 +168,7 @@ export function CommunityNoteCard({
             </a>
           </CollapsibleContent>
         </Collapsible>
-      </CardContent>
-    </Card>
+      </div>
+    </DecisionSection>
   );
 }

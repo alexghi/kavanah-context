@@ -3,6 +3,7 @@ import {
   ANTISEMITISM_LEVELS,
   CONFIDENCE_LEVELS,
   IHRA_REVIEW_EXPLAINER,
+  scoreBand,
   type AnalysisProgress,
   type AnalyzePostResponse,
   type Claim,
@@ -10,16 +11,17 @@ import {
   type EvidenceItem,
   type IhraAssessment,
 } from "@kavannah/shared";
+import { disinfoVerdict, keySources } from "@/lib/decisions";
+import { TONE_ICON } from "@/lib/tone";
 import { AntisemitismDetails } from "./AntisemitismDetails";
-import { EvidenceList } from "./EvidenceList";
+import { DecisionSection } from "./DecisionSection";
+import { EvidenceList, SourceItem } from "./EvidenceList";
 import { IhraReview } from "./IhraReview";
 import { LabelList } from "./LabelList";
-import { ScoreMeter } from "./ScoreMeter";
-import { SectionLabel } from "./SectionLabel";
-import { SubSection } from "./SubSection";
+import { ScoreLegend, ScoreSummary } from "./ScoreMeter";
+import { GroupTitle, SubSection } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge, ToneBadge } from "./ui/badge";
-import { Card, CardHeader, CardTitle } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 
 /** What the card shows: a finished analysis, or the parts that have arrived so far. */
@@ -62,29 +64,57 @@ function Pending({ text }: { text: string }) {
   );
 }
 
+export interface AssessmentCardProps {
+  view: AssessmentView;
+  open: boolean;
+  onOpenChange(open: boolean): void;
+}
+
 /**
- * The content assessment: headline and AI confidence, then one titled part per signal
- * (score, labels, antisemitism, reasoning, evidence), each explained where it appears. Parts
+ * The "Disinfo" decision. Always visible: the verdict, the score with its scale and the AI
+ * confidence. Behind the disclosure: the headline, then one titled part per signal (score
+ * legend, labels, antisemitism, reasoning, evidence), each explained where it appears. Parts
  * that are still being computed show a pending state, so the card is useful before the end.
  */
-export function AssessmentCard({ view }: { view: AssessmentView }) {
+export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps) {
   const { classification, evidence, ihra, ihraPending, warnings } = view;
   const confidence = CONFIDENCE_LEVELS[classification.confidence];
   const antisemitismLevel = ANTISEMITISM_LEVELS[classification.antisemitism.assessment];
+  const flagged = classification.antisemitism.assessment !== "not_detected";
+  const verdict = disinfoVerdict(classification, evidence ?? []);
+  const sources = keySources(evidence ?? []);
+  const confidenceText = `AI confidence: ${confidence.label}`;
 
   return (
-    <Card aria-labelledby="kavannah-assessment-title">
-      <CardHeader className="gap-2 pb-3.5">
-        <SectionLabel>Content assessment</SectionLabel>
-        <CardTitle id="kavannah-assessment-title" className="text-[17px] leading-snug">
-          {classification.headline}
-        </CardTitle>
-        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] leading-5">
-          <span className="font-semibold text-foreground">AI confidence:</span>
-          <Badge variant="neutral">{confidence.label}</Badge>
-          <span className="text-muted-foreground">{confidence.definition}</span>
+    <DecisionSection
+      label="Disinfo"
+      verdict={verdict}
+      status={{ Icon: TONE_ICON[verdict.tone], tone: verdict.tone }}
+      metaText={flagged ? `${confidenceText}, antisemitism ${antisemitismLevel.label}` : confidenceText}
+      summary={
+        <div className="space-y-2.5">
+          <ScoreSummary
+            score={classification.disinformationScore}
+            hideBand={scoreBand(classification.disinformationScore).label === verdict.label}
+            aside={
+              <>
+                <span className="text-[12px] font-semibold text-foreground">AI confidence:</span>
+                <Badge variant="neutral">{confidence.label}</Badge>
+              </>
+            }
+          />
+          {flagged && <ToneBadge tone={antisemitismLevel.tone}>Antisemitism: {antisemitismLevel.label}</ToneBadge>}
+        </div>
+      }
+      open={open}
+      onOpenChange={onOpenChange}
+    >
+      <div className="space-y-1.5 px-4 py-3.5">
+        <h4 className="text-[15px] font-semibold leading-snug tracking-tight">{classification.headline}</h4>
+        <p className="text-[12.5px] leading-5 text-muted-foreground">
+          <span className="font-semibold text-foreground">{confidenceText}.</span> {confidence.definition}
         </p>
-      </CardHeader>
+      </div>
 
       <div className="divide-y divide-border border-t border-border">
         <SubSection
@@ -92,7 +122,7 @@ export function AssessmentCard({ view }: { view: AssessmentView }) {
           title="Disinformation score"
           aside={<span className="text-[11.5px] font-medium text-muted-foreground">AI estimate</span>}
         >
-          <ScoreMeter score={classification.disinformationScore} />
+          <ScoreLegend score={classification.disinformationScore} />
         </SubSection>
 
         <SubSection icon={Tags} title="Labels">
@@ -130,7 +160,23 @@ export function AssessmentCard({ view }: { view: AssessmentView }) {
         </SubSection>
 
         <SubSection icon={FileSearch} title="Evidence">
-          {evidence ? <EvidenceList evidence={evidence} /> : <Pending text="Checking the post's claims against sources…" />}
+          {evidence ? (
+            <div className="space-y-3">
+              {sources.length > 0 && (
+                <div>
+                  <GroupTitle>Key sources</GroupTitle>
+                  <ul className="mt-1 space-y-1.5">
+                    {sources.map((source) => (
+                      <SourceItem key={source.id} source={source} compact />
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <EvidenceList evidence={evidence} />
+            </div>
+          ) : (
+            <Pending text="Checking the post's claims against sources…" />
+          )}
         </SubSection>
 
         {warnings.length > 0 && (
@@ -148,6 +194,6 @@ export function AssessmentCard({ view }: { view: AssessmentView }) {
           </div>
         )}
       </div>
-    </Card>
+    </DecisionSection>
   );
 }
