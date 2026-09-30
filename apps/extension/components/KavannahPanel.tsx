@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { CircleHelp, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
-import type { AnalysisMeta, PostContext } from "@kavannah/shared";
+import type { AnalysisMeta, DraftKind, PostContext } from "@kavannah/shared";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import type { AnalysisClient } from "@/lib/api";
+import { ALL_CLOSED, type DecisionId } from "@/lib/decisions";
 import type { HostTheme } from "@/lib/theme";
 import { cn, describeError, formatDuration } from "@/lib/utils";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
@@ -16,6 +17,8 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 
+/** The note draft for X's request form: the text, or a promise of it while it is being written (`null` = drafting failed). */
+export type NoteExplanation = string | Promise<string | null>;
 
 export const PANEL_Z_INDEX = 2147483000;
 export const PANEL_WIDTH_PX = 420;
@@ -32,7 +35,8 @@ export interface KavannahPanelProps {
   onDismissNotice?: () => void;
   onClose?: () => void;
   onOpenSettings?: () => void;
-  onRequestCommunityNote?: (post: PostContext) => Promise<CommunityNoteMenuStatus>;
+  /** Run X's Community Note request flow; with `explanation`, open X's form and fill it. */
+  onRequestCommunityNote?: (post: PostContext, explanation?: NoteExplanation) => Promise<CommunityNoteMenuStatus>;
   /** True when the caller knows the answer will come from demo fixtures (shows the Demo chip early). */
   demo?: boolean;
 }
@@ -62,6 +66,15 @@ export function KavannahPanel({
   const [hidden, setHidden] = useState(isDrawer && !open);
   const [noteRequest, setNoteRequest] = useState<NoteRequestState>({ status: "idle" });
   const [guideOpen, setGuideOpen] = useState(false);
+  const [openSections, setOpenSections] = useState(ALL_CLOSED);
+  // Drafts already started automatically, so closing one and reopening its section doesn't regenerate it.
+  const autoDrafted = useRef(new Set<string>());
+  // "Request a Community Note" was pressed before the draft existed: X's form is already open and
+  // these are called with the draft (or null if drafting failed) once it settles.
+  const draftWaiters = useRef<Array<(text: string | null) => void>>([]);
+  const settleDraftWaiters = (text: string | null) => {
+    for (const resolve of draftWaiters.current.splice(0)) resolve(text);
+  };
   const guideRef = useRef<HTMLElement>(null);
   const postUrl = post?.url ?? null;
 
@@ -71,6 +84,8 @@ export function KavannahPanel({
 
   useEffect(() => {
     setNoteRequest({ status: "idle" });
+    settleDraftWaiters(null);
+    setOpenSections(ALL_CLOSED);
     const body = bodyRef.current;
     if (body && typeof body.scrollTo === "function") body.scrollTo({ top: 0 });
   }, [postUrl]);
@@ -93,19 +108,59 @@ export function KavannahPanel({
     }
   };
 
-  const handleRequestNote = async () => {
+  const runNoteRequest = async (explanation: NoteExplanation) => {
+    if (!post || !onRequestCommunityNote) return;
+    setNoteRequest({ status: "working" });
+    try {
+      setNoteRequest(await onRequestCommunityNote(post, explanation));
+    } catch (err) {
+      setNoteRequest({ status: "error", message: describeError(err) });
+    }
+  };
+
+  /**
+   * X's request form opens at once and is filled with the note draft (as edited). Without a
+   * draft yet, it is written while the form is open, which shows a "writing…" marker meanwhile.
+   */
+  const handleRequestNote = () => {
     if (!post) return;
     if (!onRequestCommunityNote) {
       setNoteRequest({ status: "not_offered", reason: "no_article" });
       return;
     }
-    setNoteRequest({ status: "working" });
-    try {
-      setNoteRequest(await onRequestCommunityNote(post));
-    } catch (err) {
-      setNoteRequest({ status: "error", message: describeError(err) });
+    if (state.status !== "result") return;
+    const draft = state.drafts.community_note;
+    if (draft.status === "ready") {
+      void runNoteRequest(draft.text);
+      return;
     }
+    void runNoteRequest(new Promise<string | null>((resolve) => draftWaiters.current.push(resolve)));
+    if (draft.status !== "loading") void generateDraft("community_note");
   };
+
+  const noteDraft = state.status === "result" ? state.drafts.community_note : null;
+  useEffect(() => {
+    if (!noteDraft || noteDraft.status === "loading") return;
+    // Ready: hand over the text. Failed or closed: X's form stays empty and the panel says why.
+    settleDraftWaiters(noteDraft.status === "ready" ? noteDraft.text : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on draft status changes only
+  }, [noteDraft?.status]);
+
+  // Opening a section whose answer is "yes" shows its draft straight away; otherwise the draft stays on demand.
+  const handleSectionChange = (id: DecisionId, sectionOpen: boolean) => {
+    setOpenSections((current) => ({ ...current, [id]: sectionOpen }));
+    if (!sectionOpen || id === "disinfo" || state.status !== "result") return;
+    const kind: DraftKind = id === "engage" ? "reply" : "community_note";
+    const recommended =
+      kind === "reply"
+        ? state.analysis.engagement.recommendation === "engage"
+        : state.analysis.communityNote.recommendation === "recommended";
+    const key = `${state.post.url}|${state.receivedAt}|${kind}`;
+    if (!recommended || state.drafts[kind].status !== "idle" || autoDrafted.current.has(key)) return;
+    autoDrafted.current.add(key);
+    void generateDraft(kind);
+  };
+  const disinfoSection = { open: openSections.disinfo, onOpenChange: (sectionOpen: boolean) => handleSectionChange("disinfo", sectionOpen) };
 
   const mode = state.status === "result" ? state.analysis.meta.mode : demo ? "mock" : null;
   const showsCurrent = post !== null && state.post?.url === post.url;
@@ -250,11 +305,13 @@ export function KavannahPanel({
               ihraPending={progress?.ihraPending ?? false}
             />
             <div className="space-y-3">
-            <AssessmentCard view={view} />
+            <AssessmentCard view={view} {...disinfoSection} />
             <EngageCard
               engagement={analysis?.engagement ?? null}
               pendingText={pendingText}
               draft={state.status === "result" ? state.drafts.reply : idleDrafts}
+              open={openSections.engage}
+              onOpenChange={(sectionOpen) => handleSectionChange("engage", sectionOpen)}
               onPrepare={() => void generateDraft("reply")}
               onRegenerate={() => void generateDraft("reply", { regenerate: true })}
               onRetryDraft={() => void generateDraft("reply")}
@@ -267,8 +324,10 @@ export function KavannahPanel({
               pendingText={pendingText}
               draft={state.status === "result" ? state.drafts.community_note : idleDrafts}
               request={noteRequest}
+              open={openSections.note}
+              onOpenChange={(sectionOpen) => handleSectionChange("note", sectionOpen)}
               onPrepare={() => void generateDraft("community_note")}
-              onRequest={() => void handleRequestNote()}
+              onRequest={handleRequestNote}
               onRegenerate={() => void generateDraft("community_note", { regenerate: true })}
               onRetryDraft={() => void generateDraft("community_note")}
               onChangeText={(text) => setDraftText("community_note", text)}

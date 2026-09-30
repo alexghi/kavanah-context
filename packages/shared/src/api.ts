@@ -36,7 +36,7 @@ export type ExtensionMessage =
   | { type: "kavannah:openOptions" }
   /** popup -> content script: the post on the current page (the main post on /status/<id> pages), or null */
   | { type: "kavannah:getCurrentPost" }
-  /** popup -> content script: run the "Request a Community Note" flow on the current post */
-  | { type: "kavannah:requestCommunityNote" };
+  /** popup -> content script: run the "Request a Community Note" flow on the current post, filling X's form with `explanation` */
+  | { type: "kavannah:requestCommunityNote"; payload?: { explanation?: string; sourceUrl?: string } };
 
 export type ExtensionResponse<T> = { ok: true; data: T } | { ok: false; error: { code: string; message: string } };

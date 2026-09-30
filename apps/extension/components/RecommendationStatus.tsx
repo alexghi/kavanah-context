@@ -42,17 +42,18 @@ export function StatusMark({ status, small = false }: { status: RecommendationSt
   );
 }
 
-/** A recommendation card's frame while the analysis runs: same place, same size as the answer to come. */
-export function RecommendationSkeleton({ question, text }: { question: string; text: string }) {
+/** A decision section's frame while the analysis runs: same place, same header as the answer to come. */
+export function RecommendationSkeleton({ label, text }: { label: string; text: string }) {
   return (
     <Card aria-busy="true">
-      <CardHeader className="gap-2 pb-4">
-        <SectionLabel>{question}</SectionLabel>
+      <CardHeader className="gap-2 px-4 py-3">
         <div className="flex items-center gap-2.5">
           <Skeleton className="size-8 rounded-full" />
-          <Skeleton className="h-4 w-2/5" />
+          <div className="flex-1 space-y-1.5">
+            <SectionLabel>{label}</SectionLabel>
+            <Skeleton className="h-4 w-2/5" />
+          </div>
         </div>
-        <Skeleton className="h-3 w-4/5" />
         <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground" role="status">
           <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
           {text}

@@ -18,13 +18,11 @@ export class DraftFailedError extends Error {
 
 export const NO_SOURCE_WARNING =
   "No verified source available — add a source before submitting; X rates notes without sources as unhelpful.";
-export const REPLY_LENGTH_LIMIT = 280;
 
 export const DRAFT_WARNINGS = {
   removedForeignUrl: "A URL that was not among the analysis sources was removed from the draft.",
   removedExtraUrl: (max: number) => `The draft cited more than ${max} source${max === 1 ? "" : "s"}; extra URLs were removed.`,
   removedMention: "An @mention was removed from the draft (replies should not tag accounts).",
-  replyTooLong: `The reply is longer than ${REPLY_LENGTH_LIMIT} characters; shorten it before posting.`,
   unverifiedSource: "The cited source could not be verified by the backend; open it before submitting.",
   noteWithoutSource: NO_SOURCE_WARNING,
 } as const;
@@ -85,7 +83,6 @@ export function sanitizeDraft(text: string, kind: DraftKind, allowed: Source[]):
 
   cleaned = cleaned.replace(/[ \t]{2,}/g, " ").replace(/ +\n/g, "\n").trim();
 
-  if (kind === "reply" && cleaned.length > REPLY_LENGTH_LIMIT) warnings.add(DRAFT_WARNINGS.replyTooLong);
   if (cited.some((s) => !s.verified)) warnings.add(DRAFT_WARNINGS.unverifiedSource);
 
   return { text: cleaned, sources: cited, warnings: [...warnings] };

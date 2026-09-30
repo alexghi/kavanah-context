@@ -32,14 +32,15 @@ describe("sanitizeDraft", () => {
     expect(capped.warnings).toEqual([DRAFT_WARNINGS.removedExtraUrl(1)]);
   });
 
-  it("strips @mentions from replies, warns on long replies and unverified sources", () => {
+  it("strips @mentions from replies, warns on unverified sources and sets no length limit", () => {
     const r = sanitizeDraft("@someone this is wrong, see https://example.org/other", "reply", [s2]);
     expect(r.text).toBe("this is wrong, see https://example.org/other");
     expect(r.warnings).toEqual(expect.arrayContaining([DRAFT_WARNINGS.removedMention, DRAFT_WARNINGS.unverifiedSource]));
     expect(sanitizeDraft("Hello. mail me at me@example.org", "reply", []).text).toBe("Hello. mail me at me@example.org"); // not a mention
 
     const long = sanitizeDraft("x".repeat(300), "reply", []);
-    expect(long.warnings).toEqual([DRAFT_WARNINGS.replyTooLong]);
+    expect(long.text).toHaveLength(300);
+    expect(long.warnings).toEqual([]); // long replies are fine: no cap, no warning
     expect(sanitizeDraft("@someone " + "x".repeat(300), "community_note", []).warnings).toEqual([]); // notes are not replies
   });
 

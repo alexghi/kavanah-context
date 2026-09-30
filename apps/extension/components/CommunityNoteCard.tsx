@@ -11,13 +11,13 @@ import type { DraftState } from "@/hooks/useAnalysis";
 import { useArrival } from "@/hooks/useArrival";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 import { cn } from "@/lib/utils";
+import { noteVerdict } from "@/lib/decisions";
+import { DecisionSection } from "./DecisionSection";
 import { DraftEditor } from "./DraftEditor";
-import { NOTE_STATUS, RecommendationSkeleton, StatusMark } from "./RecommendationStatus";
-import { SectionLabel } from "./SectionLabel";
+import { NOTE_STATUS, RecommendationSkeleton } from "./RecommendationStatus";
 import { GroupTitle } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
 export type NoteRequestState =
@@ -32,6 +32,8 @@ export interface CommunityNoteCardProps {
   pendingText?: string;
   draft: DraftState;
   request: NoteRequestState;
+  open: boolean;
+  onOpenChange(open: boolean): void;
   onPrepare(): void;
   onRequest(): void;
   onRegenerate(): void;
@@ -50,6 +52,30 @@ function RequestFeedback({ request }: { request: NoteRequestState }) {
         <AlertDescription>
           Highlighted “{request.label}” in the post's ••• menu. Choose it there to continue — Kavannah never submits
           anything for you.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (request.status === "filled") {
+    return (
+      <Alert variant="positive">
+        <CircleCheck aria-hidden="true" />
+        <AlertDescription>
+          {request.submitted
+            ? "Sent your request to X with the note draft as the explanation."
+            : "Opened X's request form and filled in the explanation with the note draft. Review it and press “Agree & Request a note” on X — Kavannah did not send anything."}
+          {request.truncated && " The draft was longer than X allows, so it was cut to fit."}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  if (request.status === "not_offered" && request.reason === "no_form") {
+    return (
+      <Alert variant="warning">
+        <TriangleAlert aria-hidden="true" />
+        <AlertDescription>
+          X's request form didn't open, so nothing was filled in. Copy the draft and use “Request Community Note” in
+          the post's ••• menu.
         </AlertDescription>
       </Alert>
     );
@@ -86,6 +112,8 @@ export function CommunityNoteCard({
   pendingText,
   draft,
   request,
+  open,
+  onOpenChange,
   onPrepare,
   onRequest,
   onRegenerate,
@@ -96,25 +124,23 @@ export function CommunityNoteCard({
 }: CommunityNoteCardProps) {
   const [guideOpen, setGuideOpen] = useState(false);
   const arrived = useArrival(communityNote !== null);
-  if (!communityNote) return <RecommendationSkeleton question="Should I add a Community Note?" text={pendingText ?? "Deciding once the evidence is in…"} />;
+  if (!communityNote) return <RecommendationSkeleton label="Note" text={pendingText ?? "Deciding once the evidence is in…"} />;
   const recommendation = communityNote.recommendation;
   const copy = COMMUNITY_NOTE_COPY[recommendation];
   const working = request.status === "working";
 
   return (
-    <Card aria-labelledby="kavannah-note-title" className={cn(arrived && "kavannah-breathe")}>
-      <CardHeader className="kavannah-settle pb-3">
-        <SectionLabel>Should I add a Community Note?</SectionLabel>
-        <div className="flex items-center gap-2.5">
-          <StatusMark status={NOTE_STATUS[recommendation]} />
-          <CardTitle id="kavannah-note-title" className="text-[17px]">
-            {copy.title}
-          </CardTitle>
-        </div>
-        <CardDescription>{copy.description}</CardDescription>
-      </CardHeader>
-      <CardContent className="kavannah-settle space-y-3">
-        <div className="border-t border-border pt-3">
+    <DecisionSection
+      label="Note"
+      verdict={noteVerdict(recommendation)}
+      status={NOTE_STATUS[recommendation]}
+      open={open}
+      onOpenChange={onOpenChange}
+      className={cn(arrived && "kavannah-breathe")}
+    >
+      <div className="space-y-3 p-4">
+        <p className="text-[12.5px] leading-5 text-muted-foreground">{copy.description}</p>
+        <div>
           <GroupTitle>Why</GroupTitle>
           <p className="mt-0.5 text-[13px] leading-5 text-foreground">{communityNote.rationale}</p>
         </div>
@@ -173,7 +199,7 @@ export function CommunityNoteCard({
             </a>
           </CollapsibleContent>
         </Collapsible>
-      </CardContent>
-    </Card>
+      </div>
+    </DecisionSection>
   );
 }

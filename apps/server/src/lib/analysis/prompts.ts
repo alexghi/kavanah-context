@@ -450,7 +450,7 @@ Sources: you may include URLs ONLY from the provided source list, copied exactly
 
 Task: write a public REPLY to the post.
 Rules:
-- Concise: aim for at most 280 characters (a single post).
+- No fixed length limit: be as long as a clear, well-sourced answer needs, and no longer. One short paragraph is usually enough; never pad.
 - Respectful and calm; never insult, mock or label the author; no sarcasm.
 - Directly address the relevant claim with the strongest factual point from the evidence; avoid inflammatory language.
 - If the analysis names a manipulation technique that a fact exposes (a cherry-picked time window, a misleading statistic, an out-of-context quote, a misattribution, a source that does not exist), say so plainly in one clause; describe what the post does, never the author.

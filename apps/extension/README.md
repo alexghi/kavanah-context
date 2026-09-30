@@ -27,7 +27,7 @@ The backend URL, access key (hosted servers), demo mode, trusted sources and lan
 | `entrypoints/popup/`, `entrypoints/options/` | Toolbar popup (same panel, embedded) and the settings page |
 | `lib/x/extractPost.ts` | Pure DOM -> `PostContext` (tested against `test/fixtures/x-timeline.html`) |
 | `lib/x/inject.ts` | Idempotent, MutationObserver-driven K-button injection |
-| `lib/x/communityNoteMenu.ts` | Opens the post's ••• menu and highlights X's Community Note item (never clicks it) |
+| `lib/x/communityNoteMenu.ts` | Opens the post's ••• menu, opens X's "Request Community Note" form and fills it with the note draft (sends it only if the setting is on); otherwise highlights the item |
 | `components/` | `KavannahPanel` and its cards; `components/ui/*` are hand-written shadcn-style primitives |
 | `hooks/useAnalysis.ts` | idle -> loading -> result / error state machine with retry and draft generation |
 

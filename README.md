@@ -9,7 +9,9 @@ Click the **K** in a post's action bar and Kavannah shows what is potentially pr
   note draft that follows X's own [Community Notes guidance](https://communitynotes.x.com/guide/en/contributing/examples),
   and a shortcut to X's "Request Community Note" menu item.
 
-Kavannah never posts, submits or contacts anyone. You copy what you decide to publish.
+Kavannah never posts or replies for you: you copy what you decide to publish. The one thing it can do on X is
+open the "Request Community Note" form and fill in the explanation with your note draft; it only sends that
+request if you turn on **Send Community Note requests automatically** in the settings (off by default).
 
 ## Quick start
 
@@ -133,7 +135,10 @@ x.com page ── content script ── background worker ── POST /api/analy
 - Model refusals, invalid JSON, timeouts and rate limits degrade to "uncertain" with a visible warning.
 - The disinformation score is labelled as an indicative AI assessment and shown separately from confidence.
 - The extension holds no AI key and no prompts, and only reads the DOM, calls the Kavannah server you configured
-  and copies text. "Request a Community Note" opens the post's ••• menu and highlights X's own item; it never clicks it.
+  and copies text. "Request a Community Note" opens the post's ••• menu, clicks X's own "Request Community Note"
+  item and fills the form's explanation with the note draft. It presses X's submit button only when the
+  "Send Community Note requests automatically" setting is on. A contributor's "Write a Community Note" item is
+  only highlighted, never clicked.
 - A hosted server needs a per-person access key for anything that calls the model, rate-limits each key and caps
   concurrent analyses. A live server bound to a public interface refuses to start without keys.
 

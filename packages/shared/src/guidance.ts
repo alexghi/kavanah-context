@@ -36,6 +36,15 @@ export const UNHELPFUL_NOTE_ATTRIBUTES = [
  *   initially up to 5 requests per day).
  * Kavannah only opens/points at these menus; it never submits anything.
  */
+/** X's "Request Community Note" form (/i/communitynotes/noterequest/<post id>), as observed on x.com on 2026-09-30. */
+export const X_NOTE_REQUEST_FORM = {
+  /** <textarea name=…> under "Explain?" (maxlength 2000) */
+  explanationField: "NoteRequestExplanationFormTextInput",
+  /** <input name=…> under "Add a source?": takes a link to an X post; Kavannah puts the analyzed post's URL there */
+  sourceField: "NoteRequestFormTextInput",
+  submitLabel: "Request a note",
+} as const;
+
 export const X_MENU_ITEMS = {
   write: "Write a Community Note",
   request: "Request Community Note",

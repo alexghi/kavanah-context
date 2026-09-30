@@ -12,8 +12,16 @@ export function SourceItem({ source, compact = false }: { source: Source; compac
   return (
     <li className={cn("leading-5", compact ? "text-[12px]" : "text-[12.5px]")}>
       <div className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-        <span className="font-semibold text-foreground">{source.publisher ?? hostOf(source.url)}</span>
-        <span className="text-foreground">{source.title}</span>
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="rounded-sm text-link underline decoration-link/40 underline-offset-2 hover:decoration-link focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span className="font-semibold">{source.publisher ?? hostOf(source.url)}</span> <span>{source.title}</span>
+          <ExternalLink className="ml-1 inline size-3 align-[-1px]" aria-hidden="true" />
+          <span className="sr-only-text">(opens in a new tab)</span>
+        </a>
         {unverified && (
           <ToneBadge tone="caution" title={UNVERIFIED_LINK_EXPLAINER}>
             Unverified link
@@ -26,16 +34,6 @@ export function SourceItem({ source, compact = false }: { source: Source; compac
         </p>
       )}
       {unverified && !compact && <p className="text-[12px] text-muted-foreground">{UNVERIFIED_LINK_EXPLAINER}</p>}
-      <a
-        href={source.url}
-        target="_blank"
-        rel="noreferrer noopener"
-        className="inline-flex items-center gap-1 rounded-sm font-medium text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        Open source
-        <ExternalLink className="size-3" aria-hidden="true" />
-        <span className="sr-only-text">(opens in a new tab)</span>
-      </a>
     </li>
   );
 }
