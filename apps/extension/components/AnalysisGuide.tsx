@@ -16,9 +16,14 @@ import {
   IHRA_PATTERNS,
   IHRA_REVIEW_EXPLAINER,
   LABEL_GROUPS,
+  MANIPULATION_EXPLAINER,
+  MANIPULATION_GROUPS,
+  MANIPULATION_LEVELS,
   MANIPULATION_SIGNAL_ORDER,
   MANIPULATION_SIGNALS,
   MANIPULATION_SIGNALS_EXPLAINER,
+  MANIPULATION_TECHNIQUE_ORDER,
+  MANIPULATION_TECHNIQUES,
   QUESTIONS,
   QUESTIONS_INDEPENDENT,
   SCORE_BANDS,
@@ -32,6 +37,8 @@ import {
   type Confidence,
   type ContentLabel,
   type EngagementRecommendation,
+  type ManipulationGroup,
+  type ManipulationLevel,
 } from "@kavannah/shared";
 import { FACTUAL_VERDICTS, VERDICT_EXPLAINER } from "@/lib/decisions";
 import { TONE_CLASSES } from "@/lib/tone";
@@ -48,6 +55,8 @@ const ENGAGE_ORDER: EngagementRecommendation[] = ["engage", "do_not_engage", "un
 const NOTE_ORDER: CommunityNoteRecommendation[] = ["recommended", "not_recommended", "uncertain"];
 const LEVEL_ORDER: AntisemitismLevel[] = ["likely", "possible", "not_detected"];
 const CONFIDENCE_ORDER: Confidence[] = ["high", "medium", "low"];
+const MANIPULATION_LEVEL_ORDER: ManipulationLevel[] = ["central", "present", "none"];
+const MANIPULATION_GROUP_ORDER: ManipulationGroup[] = ["pressure", "evidence", "reasoning", "blame"];
 const BANDS_ASC = [...SCORE_BANDS].sort((a, b) => a.min - b.min);
 const labelsIn = (group: "finding" | "type") =>
   (Object.keys(CONTENT_LABELS) as ContentLabel[]).filter((id) => CONTENT_LABELS[id].group === group);
@@ -203,6 +212,37 @@ export function AnalysisGuide({
                   definition: band.meaning,
                 }))}
               />
+            </GuideSection>
+
+            <GuideSection title="Manipulation techniques" intro={MANIPULATION_EXPLAINER}>
+              <div className="space-y-3">
+                <div>
+                  <GroupTitle>Levels</GroupTitle>
+                  <div className="mt-1.5">
+                    <Terms
+                      items={MANIPULATION_LEVEL_ORDER.map((value) => ({
+                        key: value,
+                        term: <ToneBadge tone={MANIPULATION_LEVELS[value].tone}>{MANIPULATION_LEVELS[value].label}</ToneBadge>,
+                        definition: MANIPULATION_LEVELS[value].definition,
+                      }))}
+                    />
+                  </div>
+                </div>
+                {MANIPULATION_GROUP_ORDER.map((group) => (
+                  <div key={group}>
+                    <GroupTitle hint={MANIPULATION_GROUPS[group].description}>{MANIPULATION_GROUPS[group].title}</GroupTitle>
+                    <div className="mt-1.5">
+                      <Terms
+                        items={MANIPULATION_TECHNIQUE_ORDER.filter((technique) => MANIPULATION_TECHNIQUES[technique].group === group).map((technique) => ({
+                          key: technique,
+                          term: MANIPULATION_TECHNIQUES[technique].label,
+                          definition: MANIPULATION_TECHNIQUES[technique].definition,
+                        }))}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </GuideSection>
 
             <GuideSection title="AI confidence" intro={CONFIDENCE_EXPLAINER}>

@@ -7,7 +7,9 @@ import type {
   ContentLabel,
   EvidenceVerdict,
   IhraPattern,
+  ManipulationLevel,
   ManipulationSignal,
+  ManipulationTechnique,
   StatementBasis,
 } from "./schemas";
 
@@ -405,6 +407,124 @@ export const IHRA_REVIEW_EXPLAINER =
 
 export const COMMUNITY_NOTE_2_EXPLAINER =
   "An extended, neutral explanation of what is misleading, what changes in meaning and why it matters, with sources. It is longer than an X Community Note: shorten it before posting.";
+
+// ---------------------------------------------------------------------------
+// Information manipulation
+// ---------------------------------------------------------------------------
+
+export type ManipulationGroup = "pressure" | "evidence" | "reasoning" | "blame";
+
+export const MANIPULATION_GROUPS: Record<ManipulationGroup, { title: string; description: string }> = {
+  pressure: { title: "Emotional and social pressure", description: "Ways of moving the reader that bypass the argument." },
+  evidence: { title: "Distorted evidence", description: "Real or invented material presented so it proves more than it does." },
+  reasoning: { title: "Distorted reasoning", description: "Arguments built so that the conclusion looks forced." },
+  blame: { title: "Blame narratives", description: "Explanations that turn a complex situation into a culprit." },
+};
+
+export const MANIPULATION_TECHNIQUES: Record<ManipulationTechnique, { label: string; group: ManipulationGroup; definition: string }> = {
+  emotional_appeal: {
+    label: "Emotional appeal",
+    group: "pressure",
+    definition: "Fear, anger or disgust does the work that evidence should do: the feeling is offered as the reason to believe.",
+  },
+  loaded_language: {
+    label: "Loaded language",
+    group: "pressure",
+    definition: "Slanted words, slurs or dehumanising labels presented as plain description, so the judgement is smuggled in with the wording.",
+  },
+  urgency_or_call_to_action: {
+    label: "Urgency or call to action",
+    group: "pressure",
+    definition: "Pressure to act or share right now (“wake up”, “before it gets deleted”), which discourages checking first.",
+  },
+  bait_or_dog_whistle: {
+    label: "Bait or dog whistle",
+    group: "pressure",
+    definition: "Coded signals or provocation aimed at an in-group or at drawing angry replies, with deniability built in (“just asking questions”, the (((echo))) marker).",
+  },
+  cherry_picking: {
+    label: "Cherry-picking",
+    group: "evidence",
+    definition: "A true fact, example or time window chosen because it points one way, while the evidence that points the other way is left out.",
+  },
+  misleading_statistics: {
+    label: "Misleading statistics",
+    group: "evidence",
+    definition: "Real numbers presented so they mislead: a truncated axis, the wrong baseline, absolute instead of relative figures, correlation sold as cause.",
+  },
+  out_of_context: {
+    label: "Out of context",
+    group: "evidence",
+    definition: "A genuine quote, image or clip stripped of the context that changes its meaning, or reused for an event it does not show.",
+  },
+  fabricated_or_misattributed: {
+    label: "Fabricated or misattributed",
+    group: "evidence",
+    definition: "An invented quote, statistic, document or image, or a real one attributed to the wrong person, outlet or date.",
+  },
+  false_authority: {
+    label: "False authority",
+    group: "evidence",
+    definition: "A source presented as authoritative without evidence that it exists or is qualified: “a new study”, unnamed experts, an anonymous insider, an impersonated institution.",
+  },
+  false_dilemma: {
+    label: "False dilemma",
+    group: "reasoning",
+    definition: "Only two options are offered (with us or against us) when more exist.",
+  },
+  false_equivalence: {
+    label: "False equivalence",
+    group: "reasoning",
+    definition: "Two unlike things are treated as the same, so the reader transfers a judgement from one to the other.",
+  },
+  strawman: {
+    label: "Strawman",
+    group: "reasoning",
+    definition: "An opponent's position is misstated into something weaker or uglier, then that version is attacked.",
+  },
+  whataboutism: {
+    label: "Whataboutism",
+    group: "reasoning",
+    definition: "The point is deflected with an unrelated accusation (“but what about…”) instead of being answered.",
+  },
+  scapegoating: {
+    label: "Scapegoating",
+    group: "blame",
+    definition: "A complex problem is blamed on one group or person, offering a target instead of an explanation.",
+  },
+  conspiracy_framing: {
+    label: "Conspiracy framing",
+    group: "blame",
+    definition: "Events are explained by a hidden, coordinated actor, in a way no evidence could disprove (“they don't want you to know”).",
+  },
+};
+
+export const MANIPULATION_TECHNIQUE_ORDER: ManipulationTechnique[] = [
+  "emotional_appeal",
+  "loaded_language",
+  "urgency_or_call_to_action",
+  "bait_or_dog_whistle",
+  "cherry_picking",
+  "misleading_statistics",
+  "out_of_context",
+  "fabricated_or_misattributed",
+  "false_authority",
+  "false_dilemma",
+  "false_equivalence",
+  "strawman",
+  "whataboutism",
+  "scapegoating",
+  "conspiracy_framing",
+];
+
+export const MANIPULATION_LEVELS: Record<ManipulationLevel, Explained> = {
+  none: { label: "None found", tone: "positive", definition: "No manipulation technique was found in the post's own words." },
+  present: { label: "Present", tone: "caution", definition: "The post uses manipulation techniques, but its point would stand without them." },
+  central: { label: "Central to the post", tone: "critical", definition: "The post's persuasive force depends on the techniques found; take the evidence apart from the packaging." },
+};
+
+export const MANIPULATION_EXPLAINER =
+  "How the post persuades, judged separately from whether it is true. A true post can manipulate and a false one can argue fairly. Strong opinion, sarcasm or blunt criticism is not manipulation by itself.";
 
 // ---------------------------------------------------------------------------
 // AI confidence

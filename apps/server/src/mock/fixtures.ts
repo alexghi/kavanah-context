@@ -1,4 +1,4 @@
-import { FixtureSchema, legacyCategoriesFor, type AnalysisMeta, type Fixture, type IhraPattern, type PostContext, type Source, type StageReport } from "@kavannah/shared";
+import { FixtureSchema, legacyCategoriesFor, type AnalysisMeta, type Fixture, type IhraPattern, type Manipulation, type PostContext, type Source, type StageReport } from "@kavannah/shared";
 import { WARNINGS } from "../lib/analysis/analyzePost.js";
 
 /**
@@ -819,8 +819,73 @@ const RAW_FIXTURES: Fixture[] = [
   misleadingFraming,
 ];
 
+// ---------------------------------------------------------------------------
+// Manipulation analysis per demo post (triggers are the posts' own words)
+// ---------------------------------------------------------------------------
+
+const NO_MANIPULATION: Manipulation = { level: "none", summary: "", findings: [] };
+
+const MANIPULATION: Record<string, Manipulation> = {
+  "misleading-claim": {
+    level: "central",
+    summary: "An unnamed study is asserted as settled science, the missing coverage is explained away, and fear for children closes the argument.",
+    findings: [
+      { technique: "false_authority", trigger: "A new peer-reviewed study just CONFIRMED", explanation: "The study is never named or linked; its authority is asserted, not shown, and no such study exists in the literature.", confidence: "high" },
+      { technique: "conspiracy_framing", trigger: "The mainstream media won't touch it.", explanation: "The absence of coverage is explained as suppression, which turns the lack of evidence into proof.", confidence: "high" },
+      { technique: "emotional_appeal", trigger: "Protect your kids.", explanation: "Fear for children stands in for the evidence the claim would need.", confidence: "high" },
+    ],
+  },
+  "antisemitic-claim": {
+    level: "central",
+    summary: "A dated statistic is stacked onto an ethnic control myth, then relabelled as neutral ownership data.",
+    findings: [
+      { technique: "scapegoating", trigger: "every single one is run by Jewish executives. That's why you never hear the truth.", explanation: "What the public is not told is blamed on the ethnicity of executives, a culprit in place of an explanation of media ownership.", confidence: "high" },
+      { technique: "conspiracy_framing", trigger: "Not a conspiracy, just ownership records.", explanation: "Presents a hidden, coordinated control of information and pre-empts the objection by relabelling the conspiracy as records.", confidence: "high" },
+      { technique: "misleading_statistics", trigger: "6 companies control 90% of American media", explanation: "A dated figure from a 2012 infographic is stated as a current fact and used as the base for a far bigger claim.", confidence: "medium" },
+    ],
+  },
+  "antisemitic-no-claim": {
+    level: "central",
+    summary: "Dehumanising wording does all the work; there is no claim to assess.",
+    findings: [
+      { technique: "loaded_language", trigger: "jews are rats.", explanation: "A dehumanising label presented as description, with a long history in propaganda that prepared persecution.", confidence: "high" },
+    ],
+  },
+  "insufficient-evidence": {
+    level: "present",
+    summary: "An unverifiable insider and a nudge to spread the news, around a claim that may or may not turn out true.",
+    findings: [
+      { technique: "false_authority", trigger: "A friend inside the ministry told me", explanation: "An anonymous insider is the only source; nothing about it can be checked.", confidence: "medium" },
+      { technique: "urgency_or_call_to_action", trigger: "Screenshot this.", explanation: "Invites readers to spread the claim before it can be checked, treating a prediction as a scoop.", confidence: "medium" },
+    ],
+  },
+  "no-engage-note-recommended": {
+    level: "central",
+    summary: "Economic anger is aimed at a hidden Jewish owner of the world's money, marked with a coded signal and turned into a call to repost.",
+    findings: [
+      { technique: "scapegoating", trigger: "That's why your rent doubled and your savings are worthless.", explanation: "Real hardship is pinned on one family, a culprit in place of the many causes of rents and inflation.", confidence: "high" },
+      { technique: "conspiracy_framing", trigger: "The Rothschild family owns the Federal Reserve and every central bank on earth.", explanation: "A hidden owner of the world's money explains everything and can never be checked; the ownership claim itself is false.", confidence: "high" },
+      { technique: "bait_or_dog_whistle", trigger: "(((them)))", explanation: "The triple parentheses are a coded marker that names Jews to those who know it, with deniability for everyone else.", confidence: "high" },
+      { technique: "urgency_or_call_to_action", trigger: "Wake up. 🔁 if you're done being a slave to (((them))).", explanation: "Reposting is framed as an act of liberation, pressure to share rather than to check.", confidence: "high" },
+    ],
+  },
+  "misleading-framing": {
+    level: "central",
+    summary: "A cherry-picked two-year dip stands in for the trend, and the science is misstated as a promise that every year gets warmer.",
+    findings: [
+      { technique: "cherry_picking", trigger: "Global average temperature was LOWER in 2018 than in 2016. Two years of cooling.", explanation: "Two years are picked from a rising record; 2016 was an El Niño peak, so almost any later year looks like cooling.", confidence: "high" },
+      { technique: "misleading_statistics", trigger: "The data says otherwise.", explanation: "Year-to-year noise is presented as the trend; the same data put 2018 among the warmest years on record.", confidence: "high" },
+      { technique: "strawman", trigger: "Still want to talk about 'global warming'?", explanation: "Treats the science as a promise that every year is warmer than the last, then knocks that promise down.", confidence: "medium" },
+    ],
+  },
+};
+
 /** Validated at module load: an invalid fixture is a bug and must fail loudly. */
-export const FIXTURES: Fixture[] = RAW_FIXTURES.map((fixture) => {
+export const FIXTURES: Fixture[] = RAW_FIXTURES.map((raw) => {
+  const fixture: Fixture = {
+    ...raw,
+    analysis: { ...raw.analysis, classification: { ...raw.analysis.classification, manipulation: MANIPULATION[raw.id] ?? NO_MANIPULATION } },
+  };
   const parsed = FixtureSchema.safeParse(fixture);
   if (!parsed.success) {
     throw new Error(`Invalid fixture "${fixture.id}": ${parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`);

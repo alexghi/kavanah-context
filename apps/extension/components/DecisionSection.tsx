@@ -19,17 +19,22 @@ export interface DecisionSectionProps {
   summary?: ReactNode;
   open: boolean;
   onOpenChange(open: boolean): void;
+  /** Extra classes for the card itself (the arrival highlight). */
+  className?: string;
   children: ReactNode;
 }
 
-/** One decision: the header alone answers the question, the body holds the details. */
-export function DecisionSection({ label, verdict, status, meta, metaText, summary, open, onOpenChange, children }: DecisionSectionProps) {
+/**
+ * One decision: the header alone answers the question, the body holds the details. The header
+ * and summary settle in when the section first appears (not on every open of the body).
+ */
+export function DecisionSection({ label, verdict, status, meta, metaText, summary, open, onOpenChange, className, children }: DecisionSectionProps) {
   const name = `${label}: ${verdict.label}`;
 
   return (
-    <Card>
+    <Card className={className}>
       <Collapsible open={open} onOpenChange={onOpenChange}>
-        <h3>
+        <h3 className="kavannah-settle">
           <CollapsibleTrigger asChild>
             <button
               type="button"
@@ -49,7 +54,7 @@ export function DecisionSection({ label, verdict, status, meta, metaText, summar
             </button>
           </CollapsibleTrigger>
         </h3>
-        {summary && <div className="px-4 pb-3.5">{summary}</div>}
+        {summary && <div className="kavannah-settle px-4 pb-3.5">{summary}</div>}
         <CollapsibleContent>
           <div className="border-t border-border">{children}</div>
         </CollapsibleContent>

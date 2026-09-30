@@ -1,8 +1,9 @@
-import { FileSearch, Gauge, Scale, LoaderCircle, MessageSquareText, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
+import { FileSearch, Gauge, LoaderCircle, Megaphone, MessageSquareText, Scale, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
 import {
   ANTISEMITISM_LEVELS,
   CONFIDENCE_LEVELS,
   IHRA_REVIEW_EXPLAINER,
+  MANIPULATION_LEVELS,
   scoreBand,
   type AnalysisProgress,
   type AnalyzePostResponse,
@@ -11,18 +12,23 @@ import {
   type EvidenceItem,
   type IhraAssessment,
 } from "@kavannah/shared";
+import { useArrival } from "@/hooks/useArrival";
 import { ASSESSMENT_LABEL, FACTUAL_VERDICTS, disinfoVerdict, keySources } from "@/lib/decisions";
 import { TONE_ICON } from "@/lib/tone";
+import { cn } from "@/lib/utils";
 import { AntisemitismDetails } from "./AntisemitismDetails";
 import { DecisionSection } from "./DecisionSection";
 import { EvidenceList, SourceItem } from "./EvidenceList";
 import { IhraReview } from "./IhraReview";
 import { LabelList } from "./LabelList";
+import { ManipulationDetails } from "./ManipulationDetails";
 import { ManipulationSignalList, VerdictAndSignals } from "./ManipulationSignals";
 import { ScoreLegend, ScoreSummary } from "./ScoreMeter";
+import { SectionLabel } from "./SectionLabel";
 import { GroupTitle, SubSection } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Badge, ToneBadge } from "./ui/badge";
+import { Card } from "./ui/card";
 import { Skeleton } from "./ui/skeleton";
 
 /** What the card shows: a finished analysis, or the parts that have arrived so far. */
@@ -65,8 +71,45 @@ function Pending({ text }: { text: string }) {
   );
 }
 
+/**
+ * The collapsed section's frame with placeholders (header, then the verdict and signals lines
+ * and the score summary), shown from the first moment until the classification arrives, so
+ * nothing moves when it lands.
+ */
+function AssessmentSkeleton() {
+  return (
+    <Card aria-busy="true">
+      <div className="flex items-center gap-2.5 px-4 py-3">
+        <Skeleton className="size-8 rounded-full" />
+        <div className="min-w-0 flex-1 space-y-1.5">
+          <SectionLabel>{ASSESSMENT_LABEL}</SectionLabel>
+          <Skeleton className="h-4 w-2/5" />
+        </div>
+        <span className="sr-only-text">Assessment in progress</span>
+      </div>
+      <div className="space-y-2.5 px-4 pb-3.5">
+        {/* The "Verdict:" and "Manipulation signals:" lines. */}
+        <div className="space-y-1.5">
+          <Skeleton className="h-5 w-1/2" />
+          <Skeleton className="h-5 w-2/3" />
+        </div>
+        <div className="space-y-2">
+          {/* The score out of 100, with the confidence chip on the right. */}
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-7 w-16" />
+            <Skeleton className="ml-auto h-5 w-32" />
+          </div>
+          {/* The scale. */}
+          <Skeleton className="my-1 h-2.5 w-full rounded-full" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export interface AssessmentCardProps {
-  view: AssessmentView;
+  /** null until the classification arrives: the section keeps its place with a placeholder. */
+  view: AssessmentView | null;
   open: boolean;
   onOpenChange(open: boolean): void;
 }
@@ -74,15 +117,24 @@ export interface AssessmentCardProps {
 /**
  * The content and manipulation assessment. Always visible: the factual verdict, the manipulation
  * signals, the score with its scale and the AI confidence. Behind the disclosure: the headline,
- * then one titled part per signal (manipulation signals with the score legend, labels,
- * antisemitism, reasoning, evidence), each explained where it appears. Parts
- * that are still being computed show a pending state, so the card is useful before the end.
+ * then one titled part per signal (verdict, manipulation signals with the score legend, labels,
+ * manipulation techniques, antisemitism, reasoning, evidence), each explained where it appears.
+ * The frame is on screen from the start and settles in when the classification lands; parts that
+ * are still being computed show a pending state, and each late part breathes once as it arrives.
+ * Nothing inside the disclosure fades, since its content mounts again on every open.
  */
 export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps) {
+  const cardArrived = useArrival(view !== null);
+  const evidenceArrived = useArrival(Boolean(view?.evidence));
+  const ihraArrived = useArrival(Boolean(view?.ihra));
+  if (!view) return <AssessmentSkeleton />;
+
   const { classification, evidence, ihra, ihraPending, warnings } = view;
   const confidence = CONFIDENCE_LEVELS[classification.confidence];
   const antisemitismLevel = ANTISEMITISM_LEVELS[classification.antisemitism.assessment];
   const flagged = classification.antisemitism.assessment !== "not_detected";
+  const manipulation = classification.manipulation;
+  const manipulationLevel = manipulation ? MANIPULATION_LEVELS[manipulation.level] : null;
   const verdict = disinfoVerdict(classification, evidence ?? []);
   const sources = keySources(evidence ?? []);
   // Absent when the server predates the signals: say nothing, not "none detected".
@@ -113,6 +165,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
       }
       open={open}
       onOpenChange={onOpenChange}
+      className={cn(cardArrived && "kavannah-breathe")}
     >
       <div className="space-y-1.5 px-4 py-3.5">
         <h4 className="text-[15px] font-semibold leading-snug tracking-tight">{classification.headline}</h4>
@@ -141,6 +194,16 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
           <LabelList labels={classification.labels} />
         </SubSection>
 
+        {manipulation && manipulationLevel && (
+          <SubSection
+            icon={Megaphone}
+            title="Manipulation techniques"
+            aside={<ToneBadge tone={manipulationLevel.tone}>{manipulationLevel.label}</ToneBadge>}
+          >
+            <ManipulationDetails manipulation={manipulation} />
+          </SubSection>
+        )}
+
         <SubSection
           icon={ShieldAlert}
           title="Antisemitism"
@@ -150,6 +213,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
               <ToneBadge tone={antisemitismLevel.tone}>{antisemitismLevel.label}</ToneBadge>
             </span>
           }
+          className={cn(ihraArrived && "kavannah-breathe rounded-md")}
         >
           <div className="space-y-4">
             <AntisemitismDetails antisemitism={classification.antisemitism} />
@@ -171,7 +235,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
           <p className="text-[13px] leading-5 text-foreground">{classification.explanation}</p>
         </SubSection>
 
-        <SubSection icon={FileSearch} title="Evidence">
+        <SubSection icon={FileSearch} title="Evidence" className={cn(evidenceArrived && "kavannah-breathe rounded-md")}>
           {evidence ? (
             <div className="space-y-3">
               {sources.length > 0 && (

@@ -12,6 +12,12 @@ import {
   EvidenceVerdictSchema,
   groupLabels,
   IHRA_DEFINITION_URL,
+  MANIPULATION_GROUPS,
+  MANIPULATION_LEVELS,
+  MANIPULATION_TECHNIQUE_ORDER,
+  MANIPULATION_TECHNIQUES,
+  ManipulationLevelSchema,
+  ManipulationTechniqueSchema,
   SCORE_BANDS,
   scoreBand,
   VERDICT_ORDER,
@@ -39,6 +45,16 @@ describe("explanations cover every value the analysis can return", () => {
     for (const confidence of ConfidenceSchema.options) expect(nonEmpty(CONFIDENCE_LEVELS[confidence].definition), confidence).toBe(true);
     for (const verdict of EvidenceVerdictSchema.options) expect(nonEmpty(EVIDENCE_VERDICTS[verdict].definition), verdict).toBe(true);
     expect([...VERDICT_ORDER].sort()).toEqual([...EvidenceVerdictSchema.options].sort());
+  });
+
+  it("manipulation techniques and levels are all defined and grouped", () => {
+    for (const technique of ManipulationTechniqueSchema.options) {
+      const info = MANIPULATION_TECHNIQUES[technique];
+      expect(nonEmpty(info.definition), technique).toBe(true);
+      expect(MANIPULATION_GROUPS[info.group], technique).toBeDefined();
+    }
+    expect([...MANIPULATION_TECHNIQUE_ORDER].sort()).toEqual([...ManipulationTechniqueSchema.options].sort());
+    for (const level of ManipulationLevelSchema.options) expect(nonEmpty(MANIPULATION_LEVELS[level].definition), level).toBe(true);
   });
 
   it("every tone has classes and an icon", () => {

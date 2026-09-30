@@ -1,7 +1,11 @@
 import { CircleCheck, CircleHelp, CircleMinus, type LucideIcon } from "lucide-react";
 import type { CommunityNoteRecommendation, EngagementRecommendation, Tone } from "@kavannah/shared";
+import { LoaderCircle } from "lucide-react";
 import { TONE_CLASSES } from "@/lib/tone";
 import { cn } from "@/lib/utils";
+import { SectionLabel } from "./SectionLabel";
+import { Card, CardHeader } from "./ui/card";
+import { Skeleton } from "./ui/skeleton";
 
 export interface RecommendationStatus {
   Icon: LucideIcon;
@@ -35,5 +39,26 @@ export function StatusMark({ status, small = false }: { status: RecommendationSt
     >
       <status.Icon className={cn(small ? "size-3.5" : "size-5", tone.text)} />
     </span>
+  );
+}
+
+/** A decision section's frame while the analysis runs: same place, same header as the answer to come. */
+export function RecommendationSkeleton({ label, text }: { label: string; text: string }) {
+  return (
+    <Card aria-busy="true">
+      <CardHeader className="gap-2 px-4 py-3">
+        <div className="flex items-center gap-2.5">
+          <Skeleton className="size-8 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <SectionLabel>{label}</SectionLabel>
+            <Skeleton className="h-4 w-2/5" />
+          </div>
+        </div>
+        <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground" role="status">
+          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
+          {text}
+        </p>
+      </CardHeader>
+    </Card>
   );
 }
