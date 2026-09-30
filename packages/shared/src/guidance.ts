@@ -40,7 +40,7 @@ export const UNHELPFUL_NOTE_ATTRIBUTES = [
 export const X_NOTE_REQUEST_FORM = {
   /** <textarea name=…> under "Explain?" (maxlength 2000) */
   explanationField: "NoteRequestExplanationFormTextInput",
-  /** <input name=…> under "Add a source?": takes a link to an X post only, so Kavannah leaves it empty */
+  /** <input name=…> under "Add a source?": takes a link to an X post; Kavannah puts the analyzed post's URL there */
   sourceField: "NoteRequestFormTextInput",
   submitLabel: "Request a note",
 } as const;

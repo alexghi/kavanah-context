@@ -41,6 +41,9 @@ function RecommendationPending({ label, text }: { label: string; text: string })
   );
 }
 
+/** The note draft for X's request form: the text, or a promise of it while it is being written (`null` = drafting failed). */
+export type NoteExplanation = string | Promise<string | null>;
+
 export const PANEL_Z_INDEX = 2147483000;
 export const PANEL_WIDTH_PX = 420;
 
@@ -57,7 +60,7 @@ export interface KavannahPanelProps {
   onClose?: () => void;
   onOpenSettings?: () => void;
   /** Run X's Community Note request flow; with `explanation`, open X's form and fill it. */
-  onRequestCommunityNote?: (post: PostContext, explanation?: string) => Promise<CommunityNoteMenuStatus>;
+  onRequestCommunityNote?: (post: PostContext, explanation?: NoteExplanation) => Promise<CommunityNoteMenuStatus>;
   /** True when the caller knows the answer will come from demo fixtures (shows the Demo chip early). */
   demo?: boolean;
 }
@@ -90,8 +93,12 @@ export function KavannahPanel({
   const [openSections, setOpenSections] = useState(ALL_CLOSED);
   // Drafts already started automatically, so closing one and reopening its section doesn't regenerate it.
   const autoDrafted = useRef(new Set<string>());
-  // "Request a Community Note" was pressed before the draft existed: the request runs once it is ready.
-  const [requestPending, setRequestPending] = useState(false);
+  // "Request a Community Note" was pressed before the draft existed: X's form is already open and
+  // these are called with the draft (or null if drafting failed) once it settles.
+  const draftWaiters = useRef<Array<(text: string | null) => void>>([]);
+  const settleDraftWaiters = (text: string | null) => {
+    for (const resolve of draftWaiters.current.splice(0)) resolve(text);
+  };
   const guideRef = useRef<HTMLElement>(null);
   const postUrl = post?.url ?? null;
 
@@ -101,7 +108,7 @@ export function KavannahPanel({
 
   useEffect(() => {
     setNoteRequest({ status: "idle" });
-    setRequestPending(false);
+    settleDraftWaiters(null);
     setOpenSections(ALL_CLOSED);
     const body = bodyRef.current;
     if (body && typeof body.scrollTo === "function") body.scrollTo({ top: 0 });
@@ -125,7 +132,7 @@ export function KavannahPanel({
     }
   };
 
-  const runNoteRequest = async (explanation: string) => {
+  const runNoteRequest = async (explanation: NoteExplanation) => {
     if (!post || !onRequestCommunityNote) return;
     setNoteRequest({ status: "working" });
     try {
@@ -135,7 +142,10 @@ export function KavannahPanel({
     }
   };
 
-  /** X's request form is filled with the note draft (as edited); without one yet, draft it first. */
+  /**
+   * X's request form opens at once and is filled with the note draft (as edited). Without a
+   * draft yet, it is written while the form is open, which shows a "writing…" marker meanwhile.
+   */
   const handleRequestNote = () => {
     if (!post) return;
     if (!onRequestCommunityNote) {
@@ -148,24 +158,17 @@ export function KavannahPanel({
       void runNoteRequest(draft.text);
       return;
     }
-    setNoteRequest({ status: "working" });
-    setRequestPending(true);
+    void runNoteRequest(new Promise<string | null>((resolve) => draftWaiters.current.push(resolve)));
     if (draft.status !== "loading") void generateDraft("community_note");
   };
 
   const noteDraft = state.status === "result" ? state.drafts.community_note : null;
   useEffect(() => {
-    if (!requestPending || !noteDraft) return;
-    if (noteDraft.status === "ready") {
-      setRequestPending(false);
-      void runNoteRequest(noteDraft.text);
-    } else if (noteDraft.status !== "loading") {
-      // Drafting failed or was closed: the draft editor shows why, nothing is sent to X.
-      setRequestPending(false);
-      setNoteRequest({ status: "idle" });
-    }
+    if (!noteDraft || noteDraft.status === "loading") return;
+    // Ready: hand over the text. Failed or closed: X's form stays empty and the panel says why.
+    settleDraftWaiters(noteDraft.status === "ready" ? noteDraft.text : null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- runs on draft status changes only
-  }, [requestPending, noteDraft?.status]);
+  }, [noteDraft?.status]);
 
   // Opening a section whose answer is "yes" shows its draft straight away; otherwise the draft stays on demand.
   const handleSectionChange = (id: DecisionId, sectionOpen: boolean) => {

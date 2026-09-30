@@ -150,9 +150,12 @@ export function getCurrentPostFromTab(tabId: number): Promise<ExtensionResponse<
   return sendToTab<PostContext | null>(tabId, { type: "kavannah:getCurrentPost" });
 }
 
-/** Ask the content script of `tabId` to run the Community Note request flow, filling X's form with `explanation`. */
-export function requestCommunityNoteInTab(tabId: number, explanation?: string): Promise<ExtensionResponse<CommunityNoteMenuStatus>> {
-  return sendToTab<CommunityNoteMenuStatus>(tabId, { type: "kavannah:requestCommunityNote", payload: explanation ? { explanation } : {} });
+/** Ask the content script of `tabId` to run the Community Note request flow, filling X's form with `fill`. */
+export function requestCommunityNoteInTab(
+  tabId: number,
+  fill: { explanation?: string; sourceUrl?: string } = {},
+): Promise<ExtensionResponse<CommunityNoteMenuStatus>> {
+  return sendToTab<CommunityNoteMenuStatus>(tabId, { type: "kavannah:requestCommunityNote", payload: fill });
 }
 
 export function unwrap<T>(response: ExtensionResponse<T>): T {

@@ -3,9 +3,12 @@ import {
   clearCommunityNoteHighlight,
   findCommunityNoteMenuItem,
   findRequestSubmitButton,
+  FORM_HINT_ID,
+  FORM_HINT_TEXT,
   HIGHLIGHT_CLASS,
   MENU_HINT_ID,
   MENU_HINT_TEXT,
+  NoteDraftUnavailableError,
   requestCommunityNote,
 } from "@/lib/x/communityNoteMenu";
 import { wait } from "./helpers/dom";
@@ -130,13 +133,18 @@ describe("requestCommunityNote", () => {
 
   it("with a draft: clicks the Request item, fills X's form and leaves sending to the user", async () => {
     const { article, itemClick, submit, inputs } = setup({ withForm: true });
-    const status = await requestCommunityNote(article, { timeoutMs: 500, formTimeoutMs: 500, fill: { explanation: "  The Fed is not family-owned. https://example.org  " } });
+    const status = await requestCommunityNote(article, {
+      timeoutMs: 500,
+      formTimeoutMs: 500,
+      fill: { explanation: "  The Fed is not family-owned. https://example.org  ", sourceUrl: "https://x.com/u/status/1" },
+    });
     expect(status).toEqual({ status: "filled", submitted: false, truncated: false });
     expect(itemClick).toHaveBeenCalledTimes(1);
     const textarea = document.querySelector<HTMLTextAreaElement>('textarea[name="NoteRequestExplanationFormTextInput"]')!;
     expect(textarea.value).toBe("The Fed is not family-owned. https://example.org");
     expect(inputs).toEqual(["The Fed is not family-owned. https://example.org"]); // an input event fired, as typing would
-    expect(document.querySelector<HTMLInputElement>('input[name="NoteRequestFormTextInput"]')!.value).toBe("");
+    expect(document.querySelector<HTMLInputElement>('input[name="NoteRequestFormTextInput"]')!.value).toBe("https://x.com/u/status/1");
+    expect(document.getElementById(FORM_HINT_ID)).toBeNull(); // the draft was ready: no "writing…" marker
     expect(submit).not.toHaveBeenCalled();
     expect(document.getElementById(MENU_HINT_ID)).toBeNull();
   });
@@ -156,6 +164,49 @@ describe("requestCommunityNote", () => {
       submitted: false,
       truncated: false,
     });
+  });
+
+  it("draft still being written: opens X's form at once with a 'writing…' marker, then fills it", async () => {
+    const { article, submit } = setup({ withForm: true });
+    let deliver!: (text: string | null) => void;
+    const explanation = new Promise<string | null>((resolve) => (deliver = resolve));
+    const pending = requestCommunityNote(article, { timeoutMs: 500, formTimeoutMs: 500, fill: { explanation, sourceUrl: "https://x.com/u/status/1" } });
+
+    await wait(120);
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    expect(textarea.value).toBe("");
+    expect(document.querySelector<HTMLInputElement>("input")!.value).toBe("https://x.com/u/status/1"); // the link doesn't wait for the draft
+    const hint = document.getElementById(FORM_HINT_ID)!;
+    expect(hint.textContent).toBe(FORM_HINT_TEXT);
+    expect(hint.getAttribute("role")).toBe("status");
+
+    deliver("Written meanwhile.");
+    expect(await pending).toEqual({ status: "filled", submitted: false, truncated: false });
+    expect(textarea.value).toBe("Written meanwhile.");
+    expect(document.getElementById(FORM_HINT_ID)).toBeNull();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it("draft fails or the user closes X's form while it is being written: nothing is filled or sent", async () => {
+    const failed = setup({ withForm: true });
+    await expect(
+      requestCommunityNote(failed.article, { timeoutMs: 500, formTimeoutMs: 500, fill: { explanation: Promise.resolve(null), submit: true } }),
+    ).rejects.toBeInstanceOf(NoteDraftUnavailableError);
+    expect(document.getElementById(FORM_HINT_ID)).toBeNull();
+    expect(failed.submit).not.toHaveBeenCalled();
+
+    const closed = setup({ withForm: true });
+    let deliver!: (text: string | null) => void;
+    const pending = requestCommunityNote(closed.article, {
+      timeoutMs: 500,
+      formTimeoutMs: 500,
+      fill: { explanation: new Promise<string | null>((resolve) => (deliver = resolve)), submit: true },
+    });
+    await wait(120);
+    document.querySelector('[role="dialog"]')!.remove();
+    deliver("Too late.");
+    expect(await pending).toEqual({ status: "not_offered", reason: "no_form" });
+    expect(closed.submit).not.toHaveBeenCalled();
   });
 
   it("cuts the draft to X's limit and says so", async () => {

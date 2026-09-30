@@ -5,7 +5,7 @@ import { createShadowRootUi } from "wxt/utils/content-script-ui/shadow-root";
 import { defineContentScript } from "wxt/utils/define-content-script";
 import type { ExtensionResponse, PostContext } from "@kavannah/shared";
 import { PanelHost } from "@/components/PanelHost";
-import { PANEL_Z_INDEX } from "@/components/KavannahPanel";
+import { PANEL_Z_INDEX, type NoteExplanation } from "@/components/KavannahPanel";
 import { client } from "@/lib/api";
 import { isExtensionMessage } from "@/lib/background/router";
 import { createPanelStore } from "@/lib/panelStore";
@@ -34,13 +34,16 @@ export default defineContentScript({
       return findMainPostArticle(document, location.href);
     };
 
-    /** With a drafted note: open X's request form and fill it; the request is sent only if the user opted in. */
-    const requestForCurrent = async (explanation?: string): Promise<CommunityNoteMenuStatus> => {
+    /**
+     * With a note draft (ready or still being written): open X's request form and fill it with the
+     * post's URL and the draft; the request is sent only if the user opted in.
+     */
+    const requestForCurrent = async (explanation?: NoteExplanation, sourceUrl?: string): Promise<CommunityNoteMenuStatus> => {
       const article = currentArticle();
-      if (!explanation?.trim()) return requestCommunityNote(article);
+      if (explanation === undefined || (typeof explanation === "string" && !explanation.trim())) return requestCommunityNote(article);
       const settings = await client.getSettings();
       const submit = settings.ok && settings.data.autoSendCommunityNote;
-      return requestCommunityNote(article, { fill: { explanation, submit } });
+      return requestCommunityNote(article, { fill: { explanation, sourceUrl, submit } });
     };
 
     // One panel instance for the whole page, rendered once inside a shadow root. WXT moves the
@@ -59,7 +62,7 @@ export default defineContentScript({
             store={store}
             client={client}
             onOpenSettings={openSettings}
-            onRequestCommunityNote={(_post, explanation) => requestForCurrent(explanation)}
+            onRequestCommunityNote={(post, explanation) => requestForCurrent(explanation, post.url)}
           />,
         );
         return root;
@@ -117,7 +120,7 @@ export default defineContentScript({
         return undefined;
       }
       if (message.type === "kavannah:requestCommunityNote") {
-        requestForCurrent(message.payload?.explanation).then(
+        requestForCurrent(message.payload?.explanation, message.payload?.sourceUrl).then(
           (status) => sendResponse({ ok: true, data: status } satisfies ExtensionResponse<CommunityNoteMenuStatus>),
           (err: unknown) => sendResponse({ ok: false, error: { code: "MENU_FLOW", message: describeError(err) } }),
         );

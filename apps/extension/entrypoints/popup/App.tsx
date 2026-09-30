@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { client, getCurrentPostFromTab, requestCommunityNoteInTab, withMock } from "@/lib/api";
 import { humanize } from "@/lib/labels";
-import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
+import type { NoteExplanation } from "@/components/KavannahPanel";
+import { NoteDraftUnavailableError, type CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 
 type FixtureSummary = FixturesResponse["fixtures"][number];
 
@@ -106,9 +107,12 @@ export function App() {
 
   if (tab.status === "post") {
     const { post, tabId, demo } = tab;
-    const requestNote = async (_post: PostContext, explanation?: string): Promise<CommunityNoteMenuStatus> => {
+    // A promise can't cross to the page's content script, so the popup waits for the draft before X's form opens.
+    const requestNote = async (target: PostContext, explanation?: NoteExplanation): Promise<CommunityNoteMenuStatus> => {
       if (tabId === null) return { status: "not_offered", reason: "no_article" };
-      const response = await requestCommunityNoteInTab(tabId, explanation);
+      const text = await explanation;
+      if (explanation !== undefined && !text?.trim()) throw new NoteDraftUnavailableError();
+      const response = await requestCommunityNoteInTab(tabId, text ? { explanation: text, sourceUrl: target.url } : {});
       if (!response.ok) throw new Error(response.error.message);
       return response.data;
     };

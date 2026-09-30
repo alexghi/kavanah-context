@@ -3,9 +3,11 @@ import { isInsideQuote } from "./extractPost";
 
 /**
  * "Request a Community Note": open the post's ••• menu and find X's own menu item.
- * - With a drafted note: click "Request Community Note", wait for X's request form and put the
- *   draft in its "Explain?" field. The request is only sent when the user turned on
- *   "Send the request automatically" in the settings; otherwise they press X's button themselves.
+ * - With a note draft (ready, or still being written): click "Request Community Note", wait for
+ *   X's request form, put the post's URL in its link field and the draft in its "Explain?" field;
+ *   while the draft is being written the form shows a "Kavannah is writing…" marker. The request
+ *   is only sent when the user turned on "Send Community Note requests automatically" in the
+ *   settings; otherwise they press X's button themselves.
  * - Without one (or for a contributor's "Write a Community Note"): highlight the item, click nothing.
  */
 
@@ -17,9 +19,26 @@ export type CommunityNoteMenuStatus =
   | { status: "filled"; submitted: boolean; truncated: boolean }
   | { status: "not_offered"; reason: "no_article" | "no_caret" | "no_menu" | "no_item" | "no_form" };
 
+export const FORM_HINT_ID = "kavannah-form-hint";
+export const FORM_HINT_TEXT = "Kavannah is writing the explanation…";
+
+/** Thrown when the note draft never arrives, so the caller can say why X's form stayed empty. */
+export class NoteDraftUnavailableError extends Error {
+  constructor() {
+    super("The note draft could not be generated, so the explanation in X's form was left empty.");
+    this.name = "NoteDraftUnavailableError";
+  }
+}
+
 export interface CommunityNoteFill {
-  /** Text for the form's "Explain?" field (the drafted Community Note). */
-  explanation: string;
+  /**
+   * Text for the form's "Explain?" field (the drafted Community Note). A promise when the draft
+   * is still being written: the form opens straight away and is filled once it resolves
+   * (`null` = drafting failed).
+   */
+  explanation: string | Promise<string | null>;
+  /** Goes into the form's "Link to an X post" field (the analyzed post's URL). */
+  sourceUrl?: string;
   /** Also press X's "Agree & Request a note" button. @default false */
   submit?: boolean;
 }
@@ -88,13 +107,84 @@ export function findRequestSubmitButton(field: HTMLElement): HTMLElement | null 
   );
 }
 
-/** Wait for X's request form, fill its "Explain?" field and, if asked, press X's submit button. */
+/** A "Kavannah is writing…" marker with a spinner, pinned inside X's explanation field. Returns its remover. */
+function showFormHint(field: HTMLElement, doc: Document): () => void {
+  const hint = doc.createElement("div");
+  hint.id = FORM_HINT_ID;
+  hint.setAttribute("role", "status");
+  const spinner = doc.createElement("span");
+  Object.assign(spinner.style, {
+    display: "inline-block",
+    width: "11px",
+    height: "11px",
+    marginRight: "7px",
+    verticalAlign: "-1px",
+    border: "2px solid rgba(255, 255, 255, 0.45)",
+    borderTopColor: "#ffffff",
+    borderRadius: "50%",
+  } satisfies Partial<CSSStyleDeclaration>);
+  if (typeof spinner.animate === "function") {
+    spinner.animate([{ transform: "rotate(0deg)" }, { transform: "rotate(360deg)" }], { duration: 800, iterations: Infinity });
+  }
+  hint.append(spinner, FORM_HINT_TEXT);
+  Object.assign(hint.style, {
+    position: "fixed",
+    zIndex: "2147483001",
+    background: ACCENT,
+    color: "#ffffff",
+    font: "600 12px/1.2 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+    padding: "6px 10px",
+    borderRadius: "6px",
+    boxShadow: "0 4px 14px rgba(0, 0, 0, 0.18)",
+    pointerEvents: "none",
+    whiteSpace: "nowrap",
+  } satisfies Partial<CSSStyleDeclaration>);
+  const place = () => {
+    const rect = field.getBoundingClientRect();
+    hint.style.left = `${Math.max(8, rect.left + 8)}px`;
+    hint.style.top = `${rect.top + 8}px`;
+  };
+  place();
+  doc.body.appendChild(hint);
+  // X's form scrolls inside its dialog: keep the marker on the field.
+  doc.addEventListener("scroll", place, true);
+  const view = doc.defaultView;
+  view?.addEventListener("resize", place);
+  return () => {
+    doc.removeEventListener("scroll", place, true);
+    view?.removeEventListener("resize", place);
+    hint.remove();
+  };
+}
+
+/**
+ * Wait for X's request form, fill its link field with the post's URL and its "Explain?" field
+ * with the draft (waiting for it behind a marker if it is still being written) and, if asked,
+ * press X's submit button.
+ */
 async function fillRequestForm(doc: Document, fill: CommunityNoteFill, timeoutMs: number): Promise<CommunityNoteMenuStatus> {
   const field = await waitFor(doc, () => findExplanationField(doc), timeoutMs);
   if (!field) return { status: "not_offered", reason: "no_form" };
 
+  const source = doc.querySelector<HTMLInputElement>(`input[name="${X_NOTE_REQUEST_FORM.sourceField}"]`);
+  if (source && fill.sourceUrl) setFieldValue(source, fill.sourceUrl);
+
+  let explanation: string | null;
+  if (typeof fill.explanation === "string") {
+    explanation = fill.explanation;
+  } else {
+    const removeHint = showFormHint(field, doc);
+    try {
+      explanation = await fill.explanation;
+    } finally {
+      removeHint();
+    }
+    if (!doc.contains(field)) return { status: "not_offered", reason: "no_form" }; // the user closed X's form meanwhile
+  }
+  if (!explanation?.trim()) throw new NoteDraftUnavailableError();
+
   const max = field.maxLength > 0 ? field.maxLength : Infinity;
-  const text = fill.explanation.trim();
+  const text = explanation.trim();
   const truncated = text.length > max;
   setFieldValue(field, truncated ? text.slice(0, max) : text);
   field.focus({ preventScroll: true });
@@ -255,7 +345,8 @@ export async function requestCommunityNote(
 
   // Items can render a beat after the container; use whatever budget is left (at least 250 ms).
   const remaining = Math.max(250, timeoutMs - (Date.now() - started));
-  const fill = options.fill?.explanation.trim() ? options.fill : undefined;
+  const explanation = options.fill?.explanation;
+  const fill = options.fill && (typeof explanation !== "string" || explanation.trim()) ? options.fill : undefined;
   const found = await waitFor(doc, () => findCommunityNoteMenuItem(menu, fill ? "request" : undefined), remaining);
   if (!found) return { status: "not_offered", reason: "no_item" };
 

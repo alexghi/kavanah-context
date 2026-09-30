@@ -724,7 +724,9 @@ async function main() {
       await form.waitFor({ timeout: T.short });
       const explanation = form.locator('textarea[name="NoteRequestExplanationFormTextInput"]');
       await waitUntil(async () => (await explanation.inputValue()) === noteDraftText, { message: "X's explanation field holds the edited note draft", timeout: T.short });
-      assert.equal(await form.locator('input[name="NoteRequestFormTextInput"]').inputValue(), "", "the 'Link to an X post' field is left empty");
+      const heroUrlRe = new RegExp(`^https://x\\.com/[^/]+/status/${HERO_ID}$`);
+      assert.match(await form.locator('input[name="NoteRequestFormTextInput"]').inputValue(), heroUrlRe, "the 'Link to an X post' field holds the post's URL");
+      assert.equal(await page.locator("#kavannah-form-hint").count(), 0, "no 'writing…' marker when the draft already exists");
       const feedback = dialog.getByRole("alert").filter({ hasText: /Opened X's request form and filled in the explanation/ });
       await feedback.waitFor({ timeout: T.short });
       assert.match(await feedback.innerText(), /Kavannah did not send anything/);
@@ -769,7 +771,9 @@ async function main() {
       const sent = dialog.getByRole("alert").filter({ hasText: /Sent your request to X/ });
       await sent.waitFor({ timeout: T.medium });
       const requests = await page.evaluate(() => window.__xFake.requests);
-      assert.deepEqual(requests, [{ source: "", explanation: noteDraftText }], "exactly one request, carrying the edited draft");
+      assert.equal(requests.length, 1, "exactly one request was sent");
+      assert.equal(requests[0].explanation, noteDraftText, "the request carries the edited draft");
+      assert.match(requests[0].source, heroUrlRe, "the request carries the post's URL");
       assert.equal(await form.count(), 0, "X closed the form after the request");
 
       await settings.bringToFront();
@@ -847,7 +851,36 @@ async function main() {
       assert.equal(engageDesc, 1);
       assert.equal(noteDesc, 1);
       await snap(dialog, "08-benign.png", entry);
-      return { engage: "Engage: No", communityNote: "Note: Not recommended" };
+
+      // No note draft exists for this post: "Request a Community Note" opens X's form at once and
+      // the explanation is written while it is open (a "writing…" marker shows meanwhile).
+      assert.equal(await dialog.getByRole("textbox", { name: "Community Note draft" }).count(), 0, "no note draft yet on the benign post");
+      const request = dialog.getByRole("button", { name: "Request a Community Note" });
+      await request.scrollIntoViewIfNeeded();
+      await request.click();
+      const form = page.locator('[role="dialog"].x-note-request');
+      await form.waitFor({ timeout: T.short });
+      const explanation = form.locator('textarea[name="NoteRequestExplanationFormTextInput"]');
+      let marker = { caught: false };
+      try {
+        const hint = page.locator("#kavannah-form-hint");
+        await hint.waitFor({ timeout: 1_000 });
+        marker = { caught: true, text: (await hint.innerText()).trim(), explanationWhileWriting: await explanation.inputValue() };
+        assert.equal(marker.text, "Kavannah is writing the explanation…");
+        assert.equal(marker.explanationWhileWriting, "", "the explanation is empty while the draft is being written");
+        await snap(page, "08a-request-writing.png", entry);
+      } catch (err) {
+        if (err && err.name === "AssertionError") throw err;
+        marker = { caught: false, note: "the draft arrived before the marker could be observed" };
+      }
+      const written = await waitUntil(async () => ((await explanation.inputValue()).trim() ? explanation.inputValue() : null), { message: "explanation filled once the draft is written", timeout: T.analysis });
+      assert.equal(await page.locator("#kavannah-form-hint").count(), 0, "marker removed once the explanation is filled");
+      assert.match(await form.locator('input[name="NoteRequestFormTextInput"]').inputValue(), new RegExp(`/status/${BENIGN_ID}$`), "the link field holds the benign post's URL");
+      assert.equal((await page.evaluate(() => window.__xFake.requests)).length, 1, "nothing new was sent (only the earlier auto-send request)");
+      await snap(page, "08c-request-filled.png", entry);
+      await page.keyboard.press("Escape");
+      await waitUntil(async () => (await form.count()) === 0, { message: "form closed after Escape", timeout: T.short });
+      return { engage: "Engage: No", communityNote: "Note: Not recommended", marker, explanationChars: written.length };
     },
     { page },
   );
