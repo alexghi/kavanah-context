@@ -1,4 +1,4 @@
-import type { AnalyzeOptions, AnalyzePostResponse, DraftRequest, DraftResponse, Fixture, PostContext, Source } from "@kavannah/shared";
+import type { AnalysisProgress, AnalyzeOptions, AnalyzePostResponse, DraftRequest, DraftResponse, Fixture, PostContext, Source } from "@kavannah/shared";
 import { NO_SOURCE_WARNING } from "../lib/analysis/draft.js";
 import { FIXTURES } from "./fixtures.js";
 
@@ -15,6 +15,8 @@ export interface MockOptions {
   delayMs?: [number, number];
   now?: () => Date;
   random?: () => number;
+  /** Progressive delivery: the demo answer is revealed in the same steps as a live analysis. */
+  onProgress?: (progress: AnalysisProgress) => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,12 +91,34 @@ export function matchFixture(post: PostContext, fixtures: Fixture[] = FIXTURES):
 // Analysis
 // ---------------------------------------------------------------------------
 
-function delay(options: MockOptions): Promise<number> {
+function pickDelay(options: MockOptions): number {
   const [min, max] = options.delayMs ?? DEFAULT_MOCK_DELAY_MS;
   const rnd = options.random ?? Math.random;
-  const ms = Math.round(min + (max - min) * rnd());
-  if (ms <= 0) return Promise.resolve(0);
-  return new Promise((resolve) => setTimeout(() => resolve(ms), ms));
+  return Math.max(0, Math.round(min + (max - min) * rnd()));
+}
+
+function sleep(ms: number): Promise<void> {
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Reveals a finished analysis in steps: classification and claims, then evidence, then the IHRA review. */
+async function revealProgressively(analysis: AnalyzePostResponse, totalMs: number, started: number, onProgress: (progress: AnalysisProgress) => void): Promise<void> {
+  const ihraPending = Boolean(analysis.ihra);
+  const base = () => ({ post: analysis.post, classification: analysis.classification, claims: analysis.claims, stages: analysis.meta.stages, warnings: analysis.meta.warnings, elapsedMs: Date.now() - started });
+  const steps: Array<{ at: number; progress: () => AnalysisProgress }> = [
+    { at: 0.3, progress: () => ({ phase: "checking_evidence", ihraPending, ...base() }) },
+    { at: 0.6, progress: () => ({ phase: ihraPending ? "reviewing_ihra" : "recommending", ihraPending, evidence: analysis.evidence, ...base() }) },
+  ];
+  if (analysis.ihra) steps.push({ at: 0.85, progress: () => ({ phase: "recommending", ihraPending: false, evidence: analysis.evidence, ihra: analysis.ihra, ...base() }) });
+  let elapsed = 0;
+  for (const step of steps) {
+    const target = Math.round(totalMs * step.at);
+    await sleep(target - elapsed);
+    elapsed = target;
+    onProgress(step.progress());
+  }
+  await sleep(totalMs - elapsed);
 }
 
 export function buildGenericAnalysis(post: PostContext, analyzedAt: string, durationMs: number): AnalyzePostResponse {
@@ -129,24 +153,28 @@ export function buildGenericAnalysis(post: PostContext, analyzedAt: string, dura
 /** Mock analysis: fixture match → fixture analysis; else a generic, clearly-labelled demo result. */
 export async function mockAnalyze(post: PostContext, _options: AnalyzeOptions | undefined, mock: MockOptions = {}): Promise<AnalyzePostResponse> {
   const now = mock.now ?? (() => new Date());
-  const waited = await delay(mock);
-  const analyzedAt = now().toISOString();
+  const started = Date.now();
+  const waited = pickDelay(mock);
   const match = matchFixture(post);
-  if (!match) return buildGenericAnalysis(post, analyzedAt, waited);
-
-  const analysis = structuredClone(match.fixture.analysis);
-  return {
-    ...analysis,
-    post, // echo the post that was actually sent (may differ slightly from the fixture on fuzzy matches)
-    meta: {
-      ...analysis.meta,
-      mode: "mock",
-      fixtureId: match.fixture.id,
-      analyzedAt,
-      durationMs: waited,
-      warnings: [MOCK_WARNING, ...analysis.meta.warnings.filter((w) => w !== MOCK_WARNING)],
-    },
+  const build = (analyzedAt: string): AnalyzePostResponse => {
+    if (!match) return buildGenericAnalysis(post, analyzedAt, waited);
+    const analysis = structuredClone(match.fixture.analysis);
+    return {
+      ...analysis,
+      post, // echo the post that was actually sent (may differ slightly from the fixture on fuzzy matches)
+      meta: {
+        ...analysis.meta,
+        mode: "mock",
+        fixtureId: match.fixture.id,
+        analyzedAt,
+        durationMs: waited,
+        warnings: [MOCK_WARNING, ...analysis.meta.warnings.filter((w) => w !== MOCK_WARNING)],
+      },
+    };
   };
+  if (mock.onProgress) await revealProgressively(build(now().toISOString()), waited, started, mock.onProgress);
+  else await sleep(waited);
+  return build(now().toISOString());
 }
 
 // ---------------------------------------------------------------------------
@@ -184,6 +212,11 @@ function composeGenericDraft(request: DraftRequest): { text: string; sources: So
 
 /** Mock draft: the fixture's draft when one exists, else a generic draft composed from the analysis. */
 export async function mockDraft(request: DraftRequest, mock: MockOptions = {}): Promise<DraftResponse> {
+  const delay = async (options: MockOptions): Promise<number> => {
+    const ms = pickDelay(options);
+    await sleep(ms);
+    return ms;
+  };
   const waited = await delay(mock);
   const fixtureId = request.analysis.meta.fixtureId;
   const fixture = (fixtureId && fixtureId !== GENERIC_FIXTURE_ID ? FIXTURES.find((f) => f.id === fixtureId) : undefined) ?? matchFixture(request.post)?.fixture;

@@ -1,4 +1,4 @@
-import type { Claim, Classification, Engagement, EvidenceItem, PostContext } from "@kavannah/shared";
+import type { Claim, Classification, Engagement, EvidenceItem, IhraAssessment, PostContext } from "@kavannah/shared";
 import type { ModelProvider, ModelResult } from "../../ai/provider.js";
 import { recommendEngagementPrompt } from "../prompts.js";
 import { EngagementOutputSchema, type EngagementOutput } from "../schemas.js";
@@ -11,11 +11,12 @@ export function recommendEngagement(
   claims: Claim[],
   evidence: EvidenceItem[],
   evidenceStatus: string,
+  ihra?: IhraAssessment,
 ): Promise<ModelResult<EngagementOutput>> {
   return provider.structured({
     stage: "recommendEngagement",
     system: recommendEngagementPrompt.system,
-    user: recommendEngagementPrompt.user(post, classification, claims, evidence, evidenceStatus),
+    user: recommendEngagementPrompt.user(post, classification, claims, evidence, evidenceStatus, ihra),
     schema: EngagementOutputSchema,
   });
 }

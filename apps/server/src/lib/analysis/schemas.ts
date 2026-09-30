@@ -1,12 +1,12 @@
 import { z } from "zod";
 import {
-  AntisemitismCategorySchema,
   ClaimTypeSchema,
   CommunityNoteRecommendationSchema,
   ConfidenceSchema,
   ContentLabelSchema,
   EngagementRecommendationSchema,
   EvidenceVerdictSchema,
+  IhraPatternSchema,
 } from "@kavannah/shared";
 
 /**
@@ -35,11 +35,104 @@ export const ClassificationOutputSchema = z.object({
   disinformationScore: z.number(),
   antisemitism: z.object({
     assessment: z.enum(["not_detected", "possible", "likely"]),
-    categories: z.array(AntisemitismCategorySchema),
+    /** IHRA patterns the post plausibly includes (screening; the full review confirms them) */
+    patterns: z.array(IhraPatternSchema),
     explanation: z.string(),
+    /** true = run the full IHRA review (the post touches Jews, Israel, Zionism, the Holocaust, Nazism or tropes) */
+    needsIhraReview: z.boolean(),
   }),
 });
 export type ClassificationOutput = z.infer<typeof ClassificationOutputSchema>;
+
+/**
+ * Full IHRA assessment (stage "assessIhra"). Optional parts of the shared contract are sent as
+ * objects with a present / needed flag, so the model always returns the same shape. Enum-valued
+ * fields inside arrays (pattern, dimension, basis, mechanism) are plain strings here: the
+ * structured-output grammar has a size limit and nested enums blow past it. The prompt lists the
+ * exact values and `buildIhraAssessment` normalizes them (unknown values are dropped).
+ */
+export const IhraOutputSchema = z.object({
+  assessment: z.enum(["not_detected", "possible", "likely"]),
+  confidence: ConfidenceSchema,
+  summary: z.string(),
+  findings: z.array(
+    z.object({
+      /** an IhraPattern value */
+      pattern: z.string(),
+      trigger: z.string(),
+      ihraExample: z.string(),
+      whyItApplies: z.string(),
+      strengthens: z.array(z.string()),
+      weakens: z.array(z.string()),
+      facts: z.array(z.string()),
+      interpretations: z.array(z.string()),
+      confidence: ConfidenceSchema,
+    }),
+  ),
+  mechanism: z.string(),
+  historicalContext: z.string(),
+  omittedDifferences: z.array(z.string()),
+  analogy: z.object({
+    present: z.boolean(),
+    historicalReferent: z.string(),
+    contemporaryReferent: z.string(),
+    /** AnalogyMechanism values */
+    mechanisms: z.array(z.string()),
+    mechanismExplanation: z.string(),
+    suppressesMaterialDifferences: z.boolean(),
+    conclusion: z.string(),
+  }),
+  tropeTransfers: z.array(
+    z.object({
+      originalTrope: z.string(),
+      substitution: z.string(),
+      contemporaryTarget: z.string(),
+      stereotypePreserved: z.boolean(),
+      explanation: z.string(),
+    }),
+  ),
+  semanticDisplacements: z.array(
+    z.object({
+      historicalReferent: z.string(),
+      operation: z.string(),
+      newReferent: z.string(),
+      consequence: z.string(),
+    }),
+  ),
+  doubleStandard: z.object({
+    present: z.boolean(),
+    comparator: z.string(),
+    asymmetry: z.string(),
+  }),
+  communityNote2: z.object({
+    needed: z.boolean(),
+    text: z.string(),
+    sourceIds: z.array(z.string()),
+  }),
+  /** every source id the assessment relies on */
+  sourceIds: z.array(z.string()),
+});
+export type IhraOutput = z.infer<typeof IhraOutputSchema>;
+
+/** The point-by-point comparison of a Nazi / Holocaust analogy (stage "compareAnalogy", parallel to assessIhra). */
+export const AnalogyRowsOutputSchema = z.object({
+  /** false when, on inspection, the post makes no such comparison */
+  present: z.boolean(),
+  rows: z.array(
+    z.object({
+      /** a ComparisonDimension value */
+      dimension: z.string(),
+      historical: z.string(),
+      contemporary: z.string(),
+      difference: z.string(),
+      /** StatementBasis values */
+      historicalBasis: z.string(),
+      contemporaryBasis: z.string(),
+      sourceIds: z.array(z.string()),
+    }),
+  ),
+});
+export type AnalogyRowsOutput = z.infer<typeof AnalogyRowsOutputSchema>;
 
 export const EvidenceOutputSchema = z.object({
   assessments: z.array(

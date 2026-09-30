@@ -29,6 +29,7 @@ SA_NAME="${KAVANNAH_GCP_SERVICE_ACCOUNT:-kavannah-api}"
 SA="$SA_NAME@$PROJECT.iam.gserviceaccount.com"
 SECRET_API_KEY="kavannah-anthropic-api-key"
 SECRET_ACCESS_KEYS="kavannah-access-keys"
+SECRET_OPENROUTER_KEY="kavannah-openrouter-key"
 MAX_INSTANCES="${KAVANNAH_GCP_MAX_INSTANCES:-2}"
 
 say() { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
@@ -81,15 +82,24 @@ cmd_secrets() {
   say "Pushing secrets to Secret Manager"
   push_secret "$SECRET_API_KEY" "$(envval ANTHROPIC_API_KEY)"
   push_secret "$SECRET_ACCESS_KEYS" "$(envval KAVANNAH_ACCESS_KEYS)"
+  if [ -n "$(envval KAVANNAH_OPENROUTER_KEY)" ]; then
+    push_secret "$SECRET_OPENROUTER_KEY" "$(envval KAVANNAH_OPENROUTER_KEY)"
+  else
+    echo "  (no KAVANNAH_OPENROUTER_KEY in $ENV_FILE: OpenRouter failover stays off)"
+  fi
 }
 
 cmd_deploy() {
   require_access_keys
-  local model effort search
+  local model effort search fast searchModel secrets
   model="$(envval KAVANNAH_MODEL)"; model="${model:-claude-opus-5-5}"
+  fast="$(envval KAVANNAH_MODEL_FAST)"
+  searchModel="$(envval KAVANNAH_SEARCH_MODEL)"
   effort="$(envval KAVANNAH_EFFORT)"; effort="${effort:-medium}"
   search="$(envval KAVANNAH_WEB_SEARCH)"; search="${search:-1}"
-  say "Deploying $SERVICE to $REGION (model $model, effort $effort, web search $search)"
+  secrets="ANTHROPIC_API_KEY=$SECRET_API_KEY:latest,KAVANNAH_ACCESS_KEYS=$SECRET_ACCESS_KEYS:latest"
+  if gc secrets describe "$SECRET_OPENROUTER_KEY" >/dev/null 2>&1; then secrets="$secrets,KAVANNAH_OPENROUTER_KEY=$SECRET_OPENROUTER_KEY:latest"; fi
+  say "Deploying $SERVICE to $REGION (judge $model, fast ${fast:-same}, search ${searchModel:-fast tier}, effort $effort, web search $search)"
   gc run deploy "$SERVICE" \
     --source "$ROOT" \
     --region "$REGION" \
@@ -100,8 +110,8 @@ cmd_deploy() {
     --concurrency 8 \
     --timeout 300 \
     --min-instances 0 --max-instances "$MAX_INSTANCES" \
-    --set-env-vars "KAVANNAH_HOST=0.0.0.0,KAVANNAH_TRUST_PROXY=1,KAVANNAH_MODEL=$model,KAVANNAH_EFFORT=$effort,KAVANNAH_WEB_SEARCH=$search" \
-    --set-secrets "ANTHROPIC_API_KEY=$SECRET_API_KEY:latest,KAVANNAH_ACCESS_KEYS=$SECRET_ACCESS_KEYS:latest"
+    --set-env-vars "^|^KAVANNAH_HOST=0.0.0.0|KAVANNAH_TRUST_PROXY=1|KAVANNAH_MODEL=$model|KAVANNAH_MODEL_FAST=$fast|KAVANNAH_SEARCH_MODEL=$searchModel|KAVANNAH_EFFORT=$effort|KAVANNAH_WEB_SEARCH=$search" \
+    --set-secrets "$secrets"
   say "Deployed: $(cmd_url)"
 }
 

@@ -10,6 +10,17 @@ export const DEFAULT_BACKEND_URL = "http://127.0.0.1:8787";
 export const DEFAULT_PORT = 8787;
 
 /**
+ * Progressive analysis over a runtime Port (content script / popup <-> service worker): the
+ * page connects with this name, sends one AnalyzePortStart, and receives AnalysisEvents
+ * (progress…, then result or error) until the worker disconnects.
+ */
+export const ANALYZE_PORT_NAME = "kavannah:analyze";
+export type AnalyzePortStart = {
+  type: "kavannah:analyze:start";
+  payload: { post: import("./schemas").PostContext; options?: import("./schemas").AnalyzeOptions };
+};
+
+/**
  * Extension messaging.
  * - content script / popup -> service worker: everything that reaches the backend, the settings
  *   and the options page (the worker owns `fetch`, so pages never talk to the server directly).

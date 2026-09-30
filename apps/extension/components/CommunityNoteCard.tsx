@@ -1,18 +1,19 @@
 import { useState } from "react";
-import { ChevronDown, CircleCheck, CircleHelp, CircleMinus, ExternalLink, FilePen, Info, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ChevronDown, CircleCheck, ExternalLink, FilePen, Info, LoaderCircle, TriangleAlert } from "lucide-react";
 import {
   COMMUNITY_NOTE_COPY,
   COMMUNITY_NOTES_GUIDE_URL,
   COMMUNITY_NOTES_HUB_URL,
   HELPFUL_NOTE_ATTRIBUTES,
   type CommunityNote,
-  type CommunityNoteRecommendation,
 } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 import { cn } from "@/lib/utils";
 import { DraftEditor } from "./DraftEditor";
+import { NOTE_STATUS, StatusMark } from "./RecommendationStatus";
 import { SectionLabel } from "./SectionLabel";
+import { GroupTitle } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -23,15 +24,6 @@ export type NoteRequestState =
   | { status: "working" }
   | { status: "error"; message: string }
   | CommunityNoteMenuStatus;
-
-export const NOTE_STATUS: Record<
-  CommunityNoteRecommendation,
-  { Icon: typeof CircleCheck; iconClass: string; bgClass: string }
-> = {
-  recommended: { Icon: CircleCheck, iconClass: "text-positive", bgClass: "bg-positive-soft" },
-  not_recommended: { Icon: CircleMinus, iconClass: "text-neutral", bgClass: "bg-neutral-soft" },
-  uncertain: { Icon: CircleHelp, iconClass: "text-caution", bgClass: "bg-caution-soft" },
-};
 
 export interface CommunityNoteCardProps {
   communityNote: CommunityNote;
@@ -69,7 +61,7 @@ function RequestFeedback({ request }: { request: NoteRequestState }) {
             href={COMMUNITY_NOTES_HUB_URL}
             target="_blank"
             rel="noreferrer noopener"
-            className="font-medium underline underline-offset-2 hover:text-primary"
+            className="font-semibold underline underline-offset-2 hover:no-underline"
           >
             Community Notes hub
           </a>{" "}
@@ -101,7 +93,6 @@ export function CommunityNoteCard({
   const [guideOpen, setGuideOpen] = useState(false);
   const recommendation = communityNote.recommendation;
   const copy = COMMUNITY_NOTE_COPY[recommendation];
-  const status = NOTE_STATUS[recommendation];
   const working = request.status === "working";
 
   return (
@@ -109,9 +100,7 @@ export function CommunityNoteCard({
       <CardHeader className="pb-3">
         <SectionLabel>Should I add a Community Note?</SectionLabel>
         <div className="flex items-center gap-2.5">
-          <span className={cn("inline-flex size-8 shrink-0 items-center justify-center rounded-full", status.bgClass)}>
-            <status.Icon className={cn("size-5", status.iconClass)} aria-hidden="true" />
-          </span>
+          <StatusMark status={NOTE_STATUS[recommendation]} />
           <CardTitle id="kavannah-note-title" className="text-[17px]">
             {copy.title}
           </CardTitle>
@@ -119,7 +108,10 @@ export function CommunityNoteCard({
         <CardDescription>{copy.description}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-[13px] leading-5 text-foreground/90">{communityNote.rationale}</p>
+        <div className="border-t border-border pt-3">
+          <GroupTitle>Why</GroupTitle>
+          <p className="mt-0.5 text-[13px] leading-5 text-foreground">{communityNote.rationale}</p>
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {draft.status === "idle" && (
@@ -152,14 +144,14 @@ export function CommunityNoteCard({
           <CollapsibleTrigger asChild>
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-[11.5px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-[12px] font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               What makes a helpful note
               <ChevronDown className={cn("size-3 transition-transform", guideOpen && "rotate-180")} aria-hidden="true" />
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12px] leading-5 text-muted-foreground">
+            <ul className="mt-2 list-disc space-y-0.5 pl-4 text-[12.5px] leading-5 text-foreground">
               {HELPFUL_NOTE_ATTRIBUTES.map((attribute) => (
                 <li key={attribute}>{attribute}</li>
               ))}
@@ -168,7 +160,7 @@ export function CommunityNoteCard({
               href={COMMUNITY_NOTES_GUIDE_URL}
               target="_blank"
               rel="noreferrer noopener"
-              className="mt-1.5 inline-flex items-center gap-1 rounded-sm text-[12px] text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-1.5 inline-flex items-center gap-1 rounded-sm text-[12px] font-medium text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Official Community Notes guide
               <ExternalLink className="size-3" aria-hidden="true" />

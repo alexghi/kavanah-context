@@ -1,10 +1,11 @@
-import { FixtureSchema, type AnalysisMeta, type Fixture, type PostContext, type Source, type StageReport } from "@kavannah/shared";
+import { FixtureSchema, legacyCategoriesFor, type AnalysisMeta, type Fixture, type IhraPattern, type PostContext, type Source, type StageReport } from "@kavannah/shared";
 import { WARNINGS } from "../lib/analysis/analyzePost.js";
 
 /**
- * Ten SYNTHETIC demo posts (invented handles, no real people) with complete analyses.
+ * Twelve SYNTHETIC demo posts (invented handles, no real people) with complete analyses.
  * Sources are real, stable pages that were checked with curl while writing this file
- * (all returned HTTP 200 on 2026-09-29); `verified` reflects that check.
+ * (all returned HTTP 200 on 2026-09-29 or 2026-09-30); `verified` reflects that check.
+ * The facts the IHRA demos state were read from the cited pages on 2026-09-30.
  */
 
 const ANALYZED_AT = "2026-09-29T09:00:00.000Z";
@@ -62,8 +63,26 @@ function stagesFor(plan: StagePlan, detail: { claims: number; checkworthy: numbe
   }
 }
 
-function meta(fixtureId: string, plan: StagePlan, detail: { claims: number; checkworthy: number; sources: number; verdicts: string }, warnings: string[] = []): AnalysisMeta {
-  const stages = stagesFor(plan, detail);
+/** The IHRA review's stages (research, URL checks, assessment), inserted before the recommendations. */
+function withIhraStages(stages: StageReport[], ihra: { sources: number; note: string } | undefined): StageReport[] {
+  if (!ihra) return stages;
+  const at = stages.findIndex((s) => s.name === "recommendEngagement");
+  const review: StageReport[] = [
+    { name: "researchIhra", ms: 38400, ok: true, note: `4 searches, ${ihra.sources} candidate sources` },
+    { name: "verifyIhraSources", ms: 910, ok: true, note: `${ihra.sources}/${ihra.sources} URLs verified` },
+    { name: "assessIhra", ms: 44100, ok: true, note: ihra.note },
+  ];
+  return [...stages.slice(0, at), ...review, ...stages.slice(at)];
+}
+
+function meta(
+  fixtureId: string,
+  plan: StagePlan,
+  detail: { claims: number; checkworthy: number; sources: number; verdicts: string },
+  warnings: string[] = [],
+  ihra?: { sources: number; note: string },
+): AnalysisMeta {
+  const stages = withIhraStages(stagesFor(plan, detail), ihra);
   return {
     version: 1,
     mode: "mock",
@@ -96,7 +115,23 @@ const SRC = {
   ushmmProtocols: (id: string) => source(id, "https://encyclopedia.ushmm.org/content/en/article/protocols-of-the-elders-of-zion", "Protocols of the Elders of Zion - Holocaust Encyclopedia (USHMM)", "Documents the fabricated conspiracy myth of Jewish control exploited by Nazi propaganda."),
   nasaTemp: (id: string) => source(id, "https://climate.nasa.gov/vital-signs/global-temperature/", "Global Temperature - NASA Climate", "NASA's global surface temperature record with annual values."),
   climateGov: (id: string) => source(id, "https://www.climate.gov/news-features/understanding-climate/climate-change-global-temperature", "Climate Change: Global Temperature - NOAA Climate.gov", "NOAA explainer on the long-term temperature trend and year-to-year variability."),
+  // IHRA review sources (checked 2026-09-30, HTTP 200; the stated facts were read on the pages)
+  stateIhra: (id: string) => source(id, "https://www.state.gov/defining-antisemitism", "Defining Antisemitism - U.S. Department of State", "Reproduces the IHRA working definition and its examples, including Nazi comparisons and classic tropes applied to Israel."),
+  ajcEcho: (id: string) => source(id, "https://www.ajc.org/translatehate/echo", "Echo - AJC Translate Hate", "Explains how triple parentheses are used online to identify, mock and harass Jews."),
+  ushmmAuschwitz: (id: string) => source(id, "https://encyclopedia.ushmm.org/content/en/article/auschwitz", "Auschwitz - Holocaust Encyclopedia (USHMM)", "The Germans killed about 1.1 million people at Auschwitz, including approximately 1,000,000 Jews, most in gas chambers using Zyklon B."),
+  ushmmNumbers: (id: string) => source(id, "https://encyclopedia.ushmm.org/content/en/article/documenting-numbers-of-victims-of-the-holocaust-and-nazi-persecution", "Documenting Numbers of Victims of the Holocaust and Nazi Persecution - Holocaust Encyclopedia (USHMM)", "Six million Jewish men, women and children were murdered by the Nazi German regime and its collaborators."),
+  ushmmWannsee: (id: string) => source(id, "https://encyclopedia.ushmm.org/content/en/article/wannsee-conference-and-the-final-solution", "Wannsee Conference and the “Final Solution” - Holocaust Encyclopedia (USHMM)", "The “Final Solution” was the code name for the systematic, deliberate, physical annihilation of the European Jews; officials coordinated it at Wannsee on 20 January 1942."),
+  wikiGazaCasualties: (id: string) => source(id, "https://en.wikipedia.org/wiki/Casualties_of_the_Gaza_war", "Casualties of the Gaza war - Wikipedia", "Tracks reported deaths: more than 75,000 Palestinians by late September 2026 according to the Gaza Health Ministry."),
+  icjGaza: (id: string) => source(id, "https://www.icj-cij.org/case/192", "Application of the Genocide Convention in the Gaza Strip (South Africa v. Israel) - International Court of Justice", "The genocide case South Africa brought against Israel at the International Court of Justice."),
+  ushmmEarlyChurch: (id: string) => source(id, "https://encyclopedia.ushmm.org/content/en/article/antisemitism-in-history-from-the-early-church-to-1400", "Antisemitism in History: From the Early Church to 1400 - Holocaust Encyclopedia (USHMM)", "How early Christian teaching blamed Jews for the crucifixion and cast their dispersion as punishment."),
+  nostraAetate: (id: string) => source(id, "https://www.vatican.va/archive/hist_councils/ii_vatican_council/documents/vat-ii_decl_19651028_nostra-aetate_en.html", "Nostra Aetate - Declaration of the Second Vatican Council (1965)", "States that Jesus's death “cannot be charged against all the Jews, without distinction, then alive, nor against the Jews of today”."),
+  wikiZionism: (id: string) => source(id, "https://en.wikipedia.org/wiki/Zionism", "Zionism - Wikipedia", "Modern Zionism emerged as a secular nationalist movement in the late 19th century."),
 };
+
+/** The antisemitism block of a classification, with the first-release categories derived from the patterns. */
+function antisemitismOf(assessment: "not_detected" | "possible" | "likely", patterns: IhraPattern[], explanation: string) {
+  return { assessment, patterns, categories: legacyCategoriesFor(patterns), explanation };
+}
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -180,11 +215,11 @@ const antisemiticClaim: Fixture = {
         "The post presents the 'Jewish control of the media' conspiracy myth as an ownership fact. The checkable part is false: the largest US media companies are publicly traded corporations owned by many institutional and individual shareholders, with executives of many backgrounds. Attributing collective control of the media to Jews in order to explain why 'the truth' is hidden matches the IHRA working definition's example of the myth of a Jewish conspiracy controlling the media.",
       confidence: "high",
       disinformationScore: 82,
-      antisemitism: {
-        assessment: "likely",
-        categories: ["conspiracy_or_control"],
-        explanation: "Attributes collective control of the media to Jews and uses it to explain a hidden 'truth': a conspiracy-of-control trope named in the IHRA working definition.",
-      },
+      antisemitism: antisemitismOf(
+        "likely",
+        ["conspiracy_or_control"],
+        "The post presents Jewish executives as collectively controlling American media and hiding “the truth”, the conspiracy-of-control stereotype named in the IHRA examples.",
+      ),
     },
     claims: [
       { id: "c1", text: "Six companies control 90% of American media.", type: "factual", checkworthy: true, reason: "A widely circulated statistic that can be checked against media-ownership data." },
@@ -219,7 +254,49 @@ const antisemiticClaim: Fixture = {
       rationale:
         "The post asserts specific, checkable ownership 'facts' that are false or misleading; a neutral note with ownership and background sources would give readers important context without amplifying the post. Evidence status: sourced.",
     },
-    meta: meta("antisemitic-claim", "full", { claims: 3, checkworthy: 2, sources: 3, verdicts: "c1=partially_supported, c2=contradicted" }),
+    ihra: {
+      assessment: "likely",
+      confidence: "high",
+      summary:
+        "The post presents Jewish executives as collectively controlling American media and hiding “the truth”, the conspiracy-of-control stereotype named in the IHRA examples. The checkable figures are dated or false, as the evidence shows, but the antisemitic element is the step from media concentration to a hidden, coordinated Jewish power.",
+      findings: [
+        {
+          pattern: "conspiracy_or_control",
+          trigger: "every single one is run by Jewish executives. That's why you never hear the truth.",
+          ihraExample:
+            "Making mendacious, dehumanizing, demonizing, or stereotypical allegations about Jews as such or the power of Jews as collective, such as the myth of Jews controlling the media, economy, government or other societal institutions.",
+          whyItApplies: "It explains what the public hears by the supposed Jewish identity of media executives, presenting Jews as a coordinated power over information.",
+          strengthens: [
+            "“That's why you never hear the truth” turns an ownership claim into a hidden-power explanation.",
+            "“Not a conspiracy, just ownership records” pre-empts the charge while restating the myth.",
+          ],
+          weakens: ["Media concentration is a legitimate subject; criticising media ownership without reference to Jews is not antisemitic."],
+          facts: [
+            "The largest US media companies are publicly traded and owned by many shareholders.",
+            "The “90%” figure comes from a 2012 infographic and is dated.",
+          ],
+          interpretations: ["The post uses a real concern, media concentration, as a vehicle for the control myth."],
+          confidence: "high",
+        },
+      ],
+      mechanism:
+        "A plausible-sounding statistic about media concentration is fused with a claim about the executives' Jewish identity, so that concentration reads as Jewish control and explains what the public is not told.",
+      historicalContext:
+        "The myth that Jews secretly control media and finance was spread by the forged “Protocols of the Elders of Zion”, which Nazi propaganda exploited. US media ownership is concentrated, but the companies are publicly traded and led by executives of many backgrounds.",
+      omittedDifferences: [
+        "Ownership by many shareholders, versus control by an ethnic or religious group",
+        "The backgrounds of individual executives, versus a coordinated group agenda",
+      ],
+      tropeTransfers: [],
+      semanticDisplacements: [],
+      communityNote2: {
+        text:
+          "The largest US media companies are publicly traded and owned by many institutional and individual shareholders, and their executives come from a range of backgrounds. The “90%” figure comes from a dated 2012 infographic. The post turns media concentration into a claim that Jews collectively decide what the public hears, echoing the conspiracy myth spread by the forged “Protocols of the Elders of Zion”. That shift matters because it moves from criticising corporate power to blaming a people. The IHRA working definition lists the myth of Jews controlling the media as an example of antisemitism.",
+        sources: [SRC.adlMedia("s2"), SRC.wikiMediaOwnership("s1"), SRC.ushmmProtocols("h1"), SRC.stateIhra("h2")],
+      },
+      sources: [SRC.adlMedia("s2"), SRC.wikiMediaOwnership("s1"), SRC.ushmmProtocols("h1"), SRC.stateIhra("h2")],
+    },
+    meta: meta("antisemitic-claim", "full", { claims: 3, checkworthy: 2, sources: 3, verdicts: "c1=partially_supported, c2=contradicted" }, [], { sources: 2, note: "likely; conspiracy_or_control" }),
   },
   drafts: {
     reply:
@@ -245,11 +322,11 @@ const antisemiticNoClaim: Fixture = {
         "The post dehumanises Jews as a group by comparing them to vermin and says they 'don't belong here'. It contains no factual claim to check; it is an expression of hatred. This is antisemitic under the IHRA working definition (dehumanising characterisations of Jews as such), but it is not misinformation because it asserts nothing checkable.",
       confidence: "high",
       disinformationScore: 4,
-      antisemitism: {
-        assessment: "likely",
-        categories: ["dehumanising_or_threatening"],
-        explanation: "Compares Jews collectively to vermin and calls for their exclusion: a dehumanising characterisation aimed at Jews as such.",
-      },
+      antisemitism: antisemitismOf(
+        "likely",
+        ["demonization_or_dehumanization"],
+        "The post calls Jews rats and says they don't belong, a dehumanizing statement about Jews as such, presented as a permanent trait.",
+      ),
     },
     claims: [],
     evidence: [],
@@ -263,7 +340,38 @@ const antisemiticNoClaim: Fixture = {
       rationale:
         "Community Notes add factual context to specific claims; this post makes no factual claim, so a note would be rated 'not needed'. Reporting the post for hateful conduct is the relevant action.",
     },
-    meta: meta("antisemitic-no-claim", "no_claims", { claims: 0, checkworthy: 0, sources: 0, verdicts: "" }),
+    ihra: {
+      assessment: "likely",
+      confidence: "high",
+      summary:
+        "The post calls Jews rats and says they don't belong, a dehumanizing statement about Jews as such, presented as a permanent trait. It makes no factual claim, so it is not misinformation, but it matches the IHRA example of dehumanizing allegations about Jews.",
+      findings: [
+        {
+          pattern: "demonization_or_dehumanization",
+          trigger: "jews are rats. always were, always will be.",
+          ihraExample: "Making mendacious, dehumanizing, demonizing, or stereotypical allegations about Jews as such or the power of Jews as collective.",
+          whyItApplies: "It compares Jews collectively to vermin and presents this as an unchangeable trait of the group.",
+          strengthens: ["“always were, always will be” makes it an essential, permanent trait.", "“they don't belong here” adds a call for exclusion."],
+          weakens: ["Nothing in the post suggests quotation, irony or condemnation."],
+          facts: ["Nazi propaganda portrayed Jews as parasites, for example in the 1940 film “The Eternal Jew”."],
+          interpretations: ["The vermin comparison places the post in the tradition of dehumanizing propaganda that preceded persecution."],
+          confidence: "high",
+        },
+      ],
+      mechanism: "Dehumanization by animal metaphor: comparing a group to vermin presents its members as a threat to be removed rather than as people.",
+      historicalContext:
+        "Nazi propaganda systematically portrayed Jews as parasites and vermin, including in “The Eternal Jew” (1940), to prepare public opinion for their exclusion and persecution.",
+      omittedDifferences: [],
+      tropeTransfers: [],
+      semanticDisplacements: [],
+      communityNote2: {
+        text:
+          "Comparing Jews to vermin repeats a staple of Nazi propaganda, which portrayed Jews as parasites, for example in the 1940 film “The Eternal Jew”, to prepare the public for their exclusion and persecution. The post makes no factual claim that a note could correct: it presents hatred as a permanent truth (“always were, always will be”) and calls for exclusion. The IHRA working definition lists dehumanizing allegations about Jews as such as an example of antisemitism.",
+        sources: [SRC.ushmmPropaganda("h1"), SRC.stateIhra("h2")],
+      },
+      sources: [SRC.ushmmPropaganda("h1"), SRC.stateIhra("h2")],
+    },
+    meta: meta("antisemitic-no-claim", "no_claims", { claims: 0, checkworthy: 0, sources: 0, verdicts: "" }, [], { sources: 2, note: "likely; demonization_or_dehumanization" }),
   },
   drafts: {
     reply: "Comparing people to vermin is dehumanising language with a long and violent history. It has no place here; I'm reporting this post.",
@@ -450,11 +558,11 @@ const noEngageNoteRecommended: Fixture = {
         "The post's central factual claim, that the Rothschild family owns the Federal Reserve and all central banks, is false: the Federal Reserve's Board of Governors is a US federal agency and the regional Reserve Banks are owned by member banks under statutory rules, not by any family, and most central banks are state institutions. The claim is embedded in the Rothschild conspiracy myth and the triple-parentheses marker '(((them)))', which attribute control of world finance to Jews and blame them for economic hardship, a trope listed in the IHRA working definition. The economic grievances (rent, savings) are real concerns attached to a fabricated cause.",
       confidence: "high",
       disinformationScore: 90,
-      antisemitism: {
-        assessment: "likely",
-        categories: ["conspiracy_or_control"],
-        explanation: "Attributes control of world finance to a Jewish family and uses the '(((echo)))' marker to signal Jews as the hidden culprits: a conspiracy-of-control trope in the IHRA working definition.",
-      },
+      antisemitism: antisemitismOf(
+        "likely",
+        ["conspiracy_or_control", "collective_blame"],
+        "The post uses the Rothschild family as a stand-in for Jewish financial power and the “(((them)))” marker to name Jews as the hidden owners of the world's money and the cause of readers' hardship.",
+      ),
     },
     claims: [
       { id: "c1", text: "The Rothschild family owns the Federal Reserve.", type: "factual", checkworthy: true, reason: "Specific ownership claim about a public institution; checkable against official sources." },
@@ -489,7 +597,58 @@ const noEngageNoteRecommended: Fixture = {
       rationale:
         "The post makes a specific, false, checkable claim about who owns the Federal Reserve, and an official source directly addresses it. A neutral note citing the Federal Reserve's own explanation plus background on the Rothschild myth gives readers important context, exactly where X's guidance says a note is helpful. Evidence status: contradicted by an official source.",
     },
-    meta: meta("no-engage-note-recommended", "full", { claims: 3, checkworthy: 2, sources: 2, verdicts: "c1=contradicted, c2=contradicted" }),
+    ihra: {
+      assessment: "likely",
+      confidence: "high",
+      summary:
+        "The post uses the Rothschild family as a stand-in for Jewish financial power and the “(((them)))” marker to name Jews as the hidden owners of the world's money and the cause of readers' hardship. That matches the IHRA examples of the myth of Jews controlling the economy and of blaming Jews collectively. The ownership claim itself is false.",
+      findings: [
+        {
+          pattern: "conspiracy_or_control",
+          trigger: "The Rothschild family owns the Federal Reserve and every central bank on earth.",
+          ihraExample:
+            "Making mendacious, dehumanizing, demonizing, or stereotypical allegations about Jews as such or the power of Jews as collective, such as the myth of Jews controlling the media, economy, government or other societal institutions.",
+          whyItApplies: "It presents a Jewish family as secretly owning the world's monetary system, the core of the Rothschild conspiracy myth.",
+          strengthens: [
+            "“every central bank on earth” claims global, hidden control.",
+            "The claim is paired with “(((them)))”, a marker used online to single out Jews.",
+          ],
+          weakens: ["Criticism of central banks and inflation is legitimate economic debate when it does not assign control to Jews."],
+          facts: ["The Federal Reserve is not owned by any family: its Board is a federal agency and the regional banks are owned by member banks."],
+          interpretations: ["The family name works as a coded reference to Jews in general."],
+          confidence: "high",
+        },
+        {
+          pattern: "collective_blame",
+          trigger: "if you're done being a slave to (((them)))",
+          ihraExample:
+            "Accusing Jews as a people of being responsible for real or imagined wrongdoing committed by a single Jewish person or group, or even for acts committed by non-Jews.",
+          whyItApplies: "Readers' real economic grievances, rent and savings, are blamed on Jews as a group, marked with triple parentheses.",
+          strengthens: ["The triple-parentheses “echo” is documented as a way antisemites single out Jews online."],
+          weakens: ["Without the marker, “them” could be read as bankers in general."],
+          facts: ["Rising rents and inflation have many documented economic causes; none involves ownership of central banks by a family."],
+          interpretations: ["“A slave to them” casts Jews as masters over everyone else."],
+          confidence: "high",
+        },
+      ],
+      mechanism:
+        "Scapegoating through a coded conspiracy: real economic pain is explained by a named Jewish family and an anonymous “(((them)))”, turning monetary policy into the hidden will of Jews.",
+      historicalContext:
+        "The Rothschilds, a Jewish banking family whose business dates back to the 18th century, have long been accused of secretly controlling the economy and profiting from wars; Nazi Germany used the myth in propaganda, including a 1940 film produced under Goebbels. The Federal Reserve's own FAQ states that no one owns it in the ordinary sense.",
+      omittedDifferences: [
+        "Public institutions established by law, versus private family ownership",
+        "Many economic causes of rising rents, versus a single hidden culprit",
+      ],
+      tropeTransfers: [],
+      semanticDisplacements: [],
+      communityNote2: {
+        text:
+          "The Federal Reserve is not owned by the Rothschilds or by any family: its Board of Governors is a federal agency and the regional Reserve Banks are owned by member banks under law. The post links real economic hardship to a Jewish family and to “(((them)))”, a typographic marker antisemites use online to single out Jews, turning monetary policy into a story of hidden Jewish control. Nazi propaganda used the same Rothschild myth. The IHRA working definition lists the myth of Jews controlling the economy as an example of antisemitism.",
+        sources: [SRC.fedFaq("s1"), SRC.ajcRothschild("s2"), SRC.ajcEcho("h1"), SRC.stateIhra("h2")],
+      },
+      sources: [SRC.fedFaq("s1"), SRC.ajcRothschild("s2"), SRC.ajcEcho("h1"), SRC.stateIhra("h2")],
+    },
+    meta: meta("no-engage-note-recommended", "full", { claims: 3, checkworthy: 2, sources: 2, verdicts: "c1=contradicted, c2=contradicted" }, [], { sources: 2, note: "likely; conspiracy_or_control, collective_blame" }),
   },
   drafts: {
     reply:

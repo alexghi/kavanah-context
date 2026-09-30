@@ -40,14 +40,21 @@ export const COMMUNITY_NOTE_COPY: Record<CommunityNoteRecommendation, { title: s
   },
 };
 
-export type ScoreBand = { min: number; label: string; tone: "neutral" | "caution" | "warning" | "critical" };
+export type ScoreBand = {
+  min: number;
+  max: number;
+  label: string;
+  tone: "neutral" | "caution" | "warning" | "critical";
+  /** What a score in this band means, in one sentence. */
+  meaning: string;
+};
 
-/** Bands for the indicative disinformation score. Always presented as an AI assessment. */
+/** Bands for the indicative disinformation score (highest first). Always presented as an AI estimate. */
 export const SCORE_BANDS: ScoreBand[] = [
-  { min: 75, label: "Likely misleading", tone: "critical" },
-  { min: 50, label: "Potentially misleading", tone: "warning" },
-  { min: 25, label: "Some concerns", tone: "caution" },
-  { min: 0, label: "No clear factual issue", tone: "neutral" },
+  { min: 75, max: 100, label: "Likely misleading", tone: "critical", meaning: "The factual content is false or seriously misleading." },
+  { min: 50, max: 74, label: "Potentially misleading", tone: "warning", meaning: "Significant parts of the factual content could mislead readers." },
+  { min: 25, max: 49, label: "Some concerns", tone: "caution", meaning: "Minor inaccuracies, exaggeration or missing context." },
+  { min: 0, max: 24, label: "No clear factual issue", tone: "neutral", meaning: "No false or misleading factual content was found." },
 ];
 
 export function scoreBand(score: number): ScoreBand {
@@ -56,4 +63,4 @@ export function scoreBand(score: number): ScoreBand {
 }
 
 export const SCORE_DISCLAIMER =
-  "Indicative AI assessment of how misleading the post's factual content appears. Not a measure of how much of the post is false.";
+  "An AI estimate of how misleading the post's factual content is, from 0 (no issue found) to 100 (clearly false). It rates facts only, so hateful content with no factual claim can score low. It is not the share of the post that is false.";

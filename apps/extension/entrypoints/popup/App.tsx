@@ -42,7 +42,7 @@ async function detectCurrentPost(): Promise<TabState> {
 function Shell({ onOpenSettings, children }: { onOpenSettings: () => void; children: ReactNode }) {
   return (
     <div className="kavannah-root flex h-full flex-col bg-background text-foreground">
-      <header className="flex shrink-0 items-center gap-2.5 border-b border-border px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2.5 border-b border-border bg-card px-4 py-3">
         <span
           aria-hidden="true"
           className="inline-flex size-7 items-center justify-center rounded-md bg-primary text-[15px] font-bold leading-none text-primary-foreground"
@@ -143,7 +143,7 @@ export function App() {
       <div className="space-y-4 p-4">
         <p className="text-[13px] leading-5 text-muted-foreground">
           Open a post on X and click the{" "}
-          <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent align-middle text-[12px] font-bold text-primary" aria-label="K">
+          <span className="inline-flex size-5 items-center justify-center rounded-full bg-accent align-middle text-[12px] font-bold text-accent-foreground" aria-label="K">
             K
           </span>{" "}
           button in its action bar, or pick a demo post:

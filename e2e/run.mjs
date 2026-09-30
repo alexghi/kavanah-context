@@ -19,6 +19,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { CONTRAST_AUDIT_IN_PAGE, expandAll } from "./contrast.mjs";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -573,7 +574,9 @@ async function main() {
       await dialog.getByRole("heading", { name: "Community Note recommended" }).waitFor({ timeout: T.short });
       await dialog.getByText("Demo", { exact: true }).waitFor({ timeout: T.short });
       await dialog.getByRole("heading", { name: "False claim in an antisemitic conspiracy frame" }).waitFor({ timeout: T.short });
-      await dialog.getByText("90 / 100").waitFor({ timeout: T.short });
+      const meter = dialog.getByRole("meter", { name: "Disinformation score" });
+      await meter.waitFor({ timeout: T.short });
+      assert.equal(await meter.getAttribute("aria-valuenow"), "90", "hero score is 90");
       await dialog.getByText("Likely misleading", { exact: true }).waitFor({ timeout: T.short });
       await dialog.getByText(`Demo fixture: ${HERO_FIXTURE}`).waitFor({ timeout: T.short });
       await dialog.getByText("Demo output from a built-in fixture, not a live analysis.").waitFor({ timeout: T.short });
@@ -782,7 +785,7 @@ async function main() {
       await dialog.getByRole("heading", { name: "Don't engage" }).waitFor({ timeout: T.short });
       await dialog.getByRole("heading", { name: "No clear factual issue identified" }).waitFor({ timeout: T.short });
       await dialog.getByText(`Demo fixture: ${BENIGN_FIXTURE}`).waitFor({ timeout: T.short });
-      await dialog.getByText("2 / 100").waitFor({ timeout: T.short });
+      assert.equal(await dialog.getByRole("meter", { name: "Disinformation score" }).getAttribute("aria-valuenow"), "2", "benign score is 2");
       const preview = (await previewRegion.innerText()).replace(/\s+/g, " ");
       assert.match(preview, /Civic Notes/);
       assert.match(preview, /@civic_notes_eu/);
@@ -880,10 +883,94 @@ async function main() {
       await openPanelFor(hero, "Don't engage");
       const light = await panelState();
       assert.equal(light.theme, "light", "drawer detects the light host page");
-      assert.equal(light.background, "rgb(255, 255, 255)", `light drawer background: ${light.background}`);
+      assert.equal(light.background, "rgb(244, 244, 246)", `light drawer background: ${light.background}`);
       await snap(page, "10b-light-host.png", entry);
       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
       return { dark: { theme: dark.theme, background: dark.background, color: dark.color }, light: { theme: light.theme, background: light.background, color: light.color } };
+    },
+    { page },
+  );
+
+  // 8. Contrast ----------------------------------------------------------------
+  await step(
+    "10",
+    "contrast: every visible text meets WCAG AA (4.5:1, large text 3:1) in light and dark: all 10 demo analyses, the settings page, the drawer on dark and light X",
+    async (entry) => {
+      const audits = [];
+      const failures = [];
+      const record = (where, scheme, result) => {
+        if (result.error) throw new Error(`${where} (${scheme}): ${result.error}`);
+        audits.push({ where, scheme, checked: result.checked, failures: result.failures.length, minRatio: result.minRatio });
+        for (const failure of result.failures) failures.push({ where, scheme, ...failure });
+      };
+      const audit = (target, pg) => pg.evaluate(`(${CONTRAST_AUDIT_IN_PAGE})(${JSON.stringify(target)})`);
+      const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
+
+      // Popup: every demo analysis, fully expanded, in both colour schemes.
+      const popup = await context.newPage();
+      attachConsole(popup, "popup");
+      await popup.setViewportSize({ width: 400, height: 600 });
+      for (const scheme of ["light", "dark"]) {
+        await popup.emulateMedia({ colorScheme: scheme });
+        await popup.goto(`chrome-extension://${extId}/popup.html`);
+        await popup.getByRole("list", { name: "Demo posts" }).getByRole("listitem").first().waitFor({ timeout: T.medium });
+        record("popup: demo picker", scheme, await audit("document", popup));
+        for (const fixture of fixtures) {
+          await popup.getByRole("button", { name: new RegExp(`^${escapeRe(fixture.title)}`) }).click();
+          await popup.getByText("Content assessment", { exact: true }).waitFor({ timeout: T.analysis });
+          await expandAll(popup.locator(".kavannah-root").first());
+          record(`popup: ${fixture.id}`, scheme, await audit("document", popup));
+          if (fixture.id === HERO_FIXTURE) await snap(popup, `11-contrast-${scheme}.png`, entry, { fullPage: true });
+          await popup.getByRole("button", { name: /All demo posts/ }).click();
+          await popup.getByRole("list", { name: "Demo posts" }).waitFor({ timeout: T.medium });
+        }
+      }
+      await popup.close();
+
+      // Settings page, with the connection-test result showing.
+      const settingsPage = await context.newPage();
+      attachConsole(settingsPage, "options");
+      for (const scheme of ["light", "dark"]) {
+        await settingsPage.emulateMedia({ colorScheme: scheme });
+        await settingsPage.goto(`chrome-extension://${extId}/options.html`);
+        await settingsPage.getByRole("button", { name: "Test connection" }).click();
+        await settingsPage.getByText(/Connected\./).waitFor({ timeout: T.medium });
+        record("settings page", scheme, await audit("document", settingsPage));
+      }
+      await settingsPage.close();
+
+      // The in-page drawer follows X's theme through data-theme: check it on a dark and a light X page.
+      await page.bringToFront();
+      for (const hostTheme of ["dark", "light"]) {
+        if (await isPanelOpen()) {
+          await page.keyboard.press("Escape");
+          await waitUntil(isPanelHidden, { message: "panel hidden", timeout: T.short });
+        }
+        await page.evaluate((theme) => document.documentElement.setAttribute("data-theme", theme), hostTheme);
+        await hero.scrollIntoViewIfNeeded();
+        await openPanelFor(hero, "Don't engage");
+        await expandAll(dialog);
+        record(`drawer on ${hostTheme} X`, (await panelState()).theme, await audit("drawer", page));
+      }
+      await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+
+      const checked = audits.reduce((sum, a) => sum + a.checked, 0);
+      const minRatio = Math.min(...audits.map((a) => a.minRatio ?? Infinity));
+      // One line per distinct offending style, so the report stays readable.
+      const distinct = [];
+      const keys = new Set();
+      for (const f of failures) {
+        const key = `${f.fg}|${f.bg}|${f.px}|${f.weight}`;
+        if (keys.has(key)) continue;
+        keys.add(key);
+        distinct.push(f);
+      }
+      const summary = { views: audits.length, textsChecked: checked, failures: failures.length, distinctFailingStyles: distinct.length, minRatio: Math.round(minRatio * 100) / 100 };
+      log(`contrast: ${JSON.stringify(summary)}`);
+      for (const f of distinct.slice(0, 40)) log(`  ${f.ratio}:1 (need ${f.need}) ${f.fg} on ${f.bg} ${f.px}px/${f.weight} [${f.scheme}, ${f.where}] "${f.text}"`);
+      entry.details = { summary, audits, distinctFailures: distinct };
+      assert.equal(failures.length, 0, `${failures.length} text elements (${distinct.length} distinct styles) are below WCAG AA contrast`);
+      return entry.details;
     },
     { page },
   );

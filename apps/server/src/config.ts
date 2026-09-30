@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 import { DEFAULT_PORT, type AnalysisMode } from "@kavannah/shared";
 import { parseAccessKeys, type AccessKey } from "./lib/auth.js";
 
-export type Effort = "low" | "medium" | "high";
+import type { Effort } from "./lib/ai/provider.js";
+export type { Effort } from "./lib/ai/provider.js";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
 export const SERVER_VERSION = "0.1.0";
@@ -16,7 +17,16 @@ export interface ServerConfig {
   port: number;
   /** Interface to bind: 127.0.0.1 (default, laptop) or 0.0.0.0 (container / hosted). */
   host: string;
+  /** The judge tier (classification, verdicts, IHRA review, recommendations, drafts). */
   model: string;
+  /** The fast tier (claim extraction, web-search research); "" = same as the judge. */
+  modelFast: string;
+  /** Backend for the research calls when it differs from the fast tier; "" = fast tier. */
+  searchModel: string;
+  /** Retry rate-limited / overloaded / timed-out Anthropic calls on OpenRouter (needs KAVANNAH_OPENROUTER_KEY). */
+  openRouterFailover: boolean;
+  /** KAVANNAH_OPENROUTER_KEY is present (the key itself stays in the environment). */
+  hasOpenRouterKey: boolean;
   effort: Effort;
   /** KAVANNAH_MOCK=1 */
   mockForced: boolean;
@@ -88,6 +98,18 @@ export function resolveConfig(env: NodeJS.ProcessEnv = process.env): ServerConfi
   const port = Number.parseInt(env.KAVANNAH_PORT ?? env.PORT ?? "", 10);
   const host = env.KAVANNAH_HOST?.trim() || DEFAULT_HOST;
   const model = env.KAVANNAH_MODEL?.trim() || DEFAULT_MODEL;
+  const hasOpenRouterKey = Boolean(env.KAVANNAH_OPENROUTER_KEY?.trim());
+  const needsOpenRouter = (id: string, name: string): string => {
+    if (id.includes("/") && !hasOpenRouterKey) {
+      notices.push(`${name}="${id}" is an OpenRouter model but KAVANNAH_OPENROUTER_KEY is not set; ignoring it.`);
+      return "";
+    }
+    return id;
+  };
+  const modelFast = needsOpenRouter(env.KAVANNAH_MODEL_FAST?.trim() ?? "", "KAVANNAH_MODEL_FAST");
+  const searchModel = needsOpenRouter(env.KAVANNAH_SEARCH_MODEL?.trim() ?? "", "KAVANNAH_SEARCH_MODEL");
+  const openRouterFailover = hasOpenRouterKey && (env.KAVANNAH_OPENROUTER_FAILOVER === undefined || truthy(env.KAVANNAH_OPENROUTER_FAILOVER));
+  if (model.includes("/") && !hasOpenRouterKey) notices.push(`KAVANNAH_MODEL="${model}" is an OpenRouter model but KAVANNAH_OPENROUTER_KEY is not set.`);
   const rawEffort = (env.KAVANNAH_EFFORT ?? "medium").trim().toLowerCase();
   let effort: Effort = "medium";
   if (rawEffort === "low" || rawEffort === "medium" || rawEffort === "high") effort = rawEffort;
@@ -121,6 +143,10 @@ export function resolveConfig(env: NodeJS.ProcessEnv = process.env): ServerConfi
     port: Number.isFinite(port) && port > 0 ? port : DEFAULT_PORT,
     host,
     model,
+    modelFast,
+    searchModel,
+    openRouterFailover,
+    hasOpenRouterKey,
     effort,
     mockForced,
     hasApiKey,

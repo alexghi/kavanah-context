@@ -73,8 +73,12 @@ the build) and presses **Test connection**. Details, costs and operations: [docs
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Required for live analysis. Missing key → demo mode. |
 | `ANTHROPIC_BASE_URL` | — | Optional custom endpoint. |
-| `KAVANNAH_MODEL` | `claude-opus-5-5` | Any Claude model id; the provider layer is swappable. |
-| `KAVANNAH_EFFORT` | `medium` | `low` / `medium` / `high` reasoning effort per stage. |
+| `KAVANNAH_MODEL` | `claude-opus-5-5` | Judge tier: classification, evidence verdicts, the IHRA review, both recommendations, drafts. |
+| `KAVANNAH_MODEL_FAST` | — | Fast tier: claim extraction and the web-search research calls (Haiku). Unset = judge model. |
+| `KAVANNAH_SEARCH_MODEL` | — | Research calls on another backend; an OpenRouter id (`vendor/model`) uses OpenRouter's web plugin. |
+| `KAVANNAH_OPENROUTER_KEY` | — | Enables OpenRouter: `vendor/model` ids run there, and Anthropic rate limits, overloads and timeouts fail over to the same Claude model on OpenRouter. |
+| `KAVANNAH_OPENROUTER_FAILOVER` | `1` | `0` = no failover (the key is used for direct routing only). |
+| `KAVANNAH_EFFORT` | `medium` | `low` / `medium` / `high` reasoning effort of the judge stages; extraction, research and the recommendations run `low`. |
 | `KAVANNAH_PORT` | `8787` | Backend port (the extension's default backend URL matches). |
 | `KAVANNAH_MOCK` | `0` | `1` = never call the model; answer from fixtures. |
 | `KAVANNAH_WEB_SEARCH` | `1` | `0` = no live source retrieval; evidence is reported as unavailable. |
@@ -137,7 +141,9 @@ x.com page ── content script ── background worker ── POST /api/analy
 
 - X's DOM selectors (`data-testid` attributes) can change; extraction is best-effort and unit-tested against a
   realistic fixture, not against live X in CI.
-- A live analysis takes about 60-120 s at medium effort (the web search stage dominates). Results are cached per
-  post URL for an hour.
+- The panel fills in progressively: the assessment appears after about 6 s, the evidence after about 25 s, and
+  the recommendations at about 32 s (measured on a benign post at medium effort; it was 56 s in one piece before).
+  A post that triggers the full IHRA review takes about 70 s, with the review arriving a few seconds before the end
+  (127 s before). Results are cached per post URL for an hour.
 - Posts truncated by X ("Show more") are analyzed from the visible text only.
 - Only X in Chrome; no automatic posting; no accounts; trusted-source preferences only influence source selection.

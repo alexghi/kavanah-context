@@ -9,7 +9,7 @@ import {
   type PostContext,
 } from "@kavannah/shared";
 import { loadEnv, resolveConfig } from "./config.js";
-import { AnthropicProvider } from "./lib/ai/anthropic.js";
+import { createRouter } from "./lib/ai/factory.js";
 import { analyzePost } from "./lib/analysis/analyzePost.js";
 import { generateDraft } from "./lib/analysis/draft.js";
 import { formatAnalysis, formatDraft } from "./lib/format.js";
@@ -98,7 +98,8 @@ async function main(): Promise<number> {
     analysis = await mockAnalyze(post, options, { delayMs: [0, 0] });
     if (draftKind) draft = await mockDraft({ post, analysis, kind: draftKind, options }, { delayMs: [0, 0] });
   } else {
-    const provider = new AnthropicProvider({ model: config.model, effort: config.effort, webSearch: config.webSearchEnabled, log });
+    const provider = createRouter(config, process.env, log);
+    if (!values.json) for (const line of provider.describe()) log.info(line.trim());
     analysis = await analyzePost(post, options, { provider, log });
     if (draftKind) draft = await generateDraft({ post, analysis, kind: draftKind, options }, { provider, log });
   }
