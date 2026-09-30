@@ -32,6 +32,7 @@ export function toClassification(output: ClassificationOutput): ScreenedClassifi
     explanation: output.explanation.trim(),
     confidence: output.confidence,
     disinformationScore: Math.max(0, Math.min(100, Math.round(score))),
+    manipulationSignals: [...new Set(output.manipulationSignals)],
     antisemitism: {
       assessment: output.antisemitism.assessment,
       categories: legacyCategoriesFor(patterns),

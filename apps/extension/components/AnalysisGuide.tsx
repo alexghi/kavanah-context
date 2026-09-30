@@ -16,6 +16,9 @@ import {
   IHRA_PATTERNS,
   IHRA_REVIEW_EXPLAINER,
   LABEL_GROUPS,
+  MANIPULATION_SIGNAL_ORDER,
+  MANIPULATION_SIGNALS,
+  MANIPULATION_SIGNALS_EXPLAINER,
   QUESTIONS,
   QUESTIONS_INDEPENDENT,
   SCORE_BANDS,
@@ -30,6 +33,7 @@ import {
   type ContentLabel,
   type EngagementRecommendation,
 } from "@kavannah/shared";
+import { FACTUAL_VERDICTS, VERDICT_EXPLAINER } from "@/lib/decisions";
 import { TONE_CLASSES } from "@/lib/tone";
 import { cn } from "@/lib/utils";
 import { IhraLink } from "./AntisemitismDetails";
@@ -165,7 +169,25 @@ export function AnalysisGuide({
               </div>
             </GuideSection>
 
-            <GuideSection title="Disinformation score" intro={SCORE_DISCLAIMER}>
+            <GuideSection title="Verdict" intro={VERDICT_EXPLAINER}>
+              <Terms
+                items={(Object.keys(FACTUAL_VERDICTS) as Array<keyof typeof FACTUAL_VERDICTS>).map((label) => ({
+                  key: label,
+                  term: label,
+                  definition: FACTUAL_VERDICTS[label],
+                }))}
+              />
+            </GuideSection>
+
+            <GuideSection title="Manipulation signals" intro={MANIPULATION_SIGNALS_EXPLAINER}>
+              <Terms
+                items={MANIPULATION_SIGNAL_ORDER.map((id) => ({
+                  key: id,
+                  term: <ToneBadge tone="caution">{MANIPULATION_SIGNALS[id].label}</ToneBadge>,
+                  definition: MANIPULATION_SIGNALS[id].definition,
+                }))}
+              />
+              <p className="text-[12.5px] leading-5 text-muted-foreground">{SCORE_DISCLAIMER}</p>
               <Terms
                 items={BANDS_ASC.map((band) => ({
                   key: String(band.min),

@@ -1,4 +1,4 @@
-import { FileSearch, Gauge, LoaderCircle, MessageSquareText, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
+import { FileSearch, Gauge, Scale, LoaderCircle, MessageSquareText, ShieldAlert, Tags, TriangleAlert } from "lucide-react";
 import {
   ANTISEMITISM_LEVELS,
   CONFIDENCE_LEVELS,
@@ -11,13 +11,14 @@ import {
   type EvidenceItem,
   type IhraAssessment,
 } from "@kavannah/shared";
-import { disinfoVerdict, keySources } from "@/lib/decisions";
+import { ASSESSMENT_LABEL, FACTUAL_VERDICTS, disinfoVerdict, keySources } from "@/lib/decisions";
 import { TONE_ICON } from "@/lib/tone";
 import { AntisemitismDetails } from "./AntisemitismDetails";
 import { DecisionSection } from "./DecisionSection";
 import { EvidenceList, SourceItem } from "./EvidenceList";
 import { IhraReview } from "./IhraReview";
 import { LabelList } from "./LabelList";
+import { ManipulationSignalList, VerdictAndSignals } from "./ManipulationSignals";
 import { ScoreLegend, ScoreSummary } from "./ScoreMeter";
 import { GroupTitle, SubSection } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
@@ -71,9 +72,10 @@ export interface AssessmentCardProps {
 }
 
 /**
- * The "Disinfo" decision. Always visible: the verdict, the score with its scale and the AI
- * confidence. Behind the disclosure: the headline, then one titled part per signal (score
- * legend, labels, antisemitism, reasoning, evidence), each explained where it appears. Parts
+ * The content and manipulation assessment. Always visible: the factual verdict, the manipulation
+ * signals, the score with its scale and the AI confidence. Behind the disclosure: the headline,
+ * then one titled part per signal (manipulation signals with the score legend, labels,
+ * antisemitism, reasoning, evidence), each explained where it appears. Parts
  * that are still being computed show a pending state, so the card is useful before the end.
  */
 export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps) {
@@ -83,16 +85,19 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
   const flagged = classification.antisemitism.assessment !== "not_detected";
   const verdict = disinfoVerdict(classification, evidence ?? []);
   const sources = keySources(evidence ?? []);
+  // Absent when the server predates the signals: say nothing, not "none detected".
+  const signals = classification.manipulationSignals;
   const confidenceText = `AI confidence: ${confidence.label}`;
 
   return (
     <DecisionSection
-      label="Disinfo"
+      label={ASSESSMENT_LABEL}
       verdict={verdict}
       status={{ Icon: TONE_ICON[verdict.tone], tone: verdict.tone }}
       metaText={flagged ? `${confidenceText}, antisemitism ${antisemitismLevel.label}` : confidenceText}
       summary={
         <div className="space-y-2.5">
+          <VerdictAndSignals verdict={verdict} signals={signals} />
           <ScoreSummary
             score={classification.disinformationScore}
             hideBand={scoreBand(classification.disinformationScore).label === verdict.label}
@@ -117,12 +122,19 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
       </div>
 
       <div className="divide-y divide-border border-t border-border">
+        <SubSection icon={Scale} title="Verdict" aside={<ToneBadge tone={verdict.tone}>{verdict.label}</ToneBadge>}>
+          <p className="text-[12.5px] leading-5 text-muted-foreground">{FACTUAL_VERDICTS[verdict.label]}</p>
+        </SubSection>
+
         <SubSection
           icon={Gauge}
-          title="Disinformation score"
+          title="Manipulation signals"
           aside={<span className="text-[11.5px] font-medium text-muted-foreground">AI estimate</span>}
         >
-          <ScoreLegend score={classification.disinformationScore} />
+          <div className="space-y-3.5">
+            {signals && <ManipulationSignalList signals={signals} />}
+            <ScoreLegend score={classification.disinformationScore} />
+          </div>
         </SubSection>
 
         <SubSection icon={Tags} title="Labels">
@@ -155,7 +167,7 @@ export function AssessmentCard({ view, open, onOpenChange }: AssessmentCardProps
           </div>
         </SubSection>
 
-        <SubSection icon={MessageSquareText} title="Why this assessment">
+        <SubSection icon={MessageSquareText} title="How the post may mislead">
           <p className="text-[13px] leading-5 text-foreground">{classification.explanation}</p>
         </SubSection>
 

@@ -158,6 +158,7 @@ const misleadingClaim: Fixture = {
         "The post asserts as settled fact that a new study confirms the MMR vaccine causes autism. Large studies covering hundreds of thousands of children have found no link, and the 1998 paper that started the claim was retracted; no study has 'confirmed' such a link. The post names no study, so the specific 'new study' claim cannot be checked, but the underlying causal claim is contradicted by the available evidence.",
       confidence: "high",
       disinformationScore: 88,
+      manipulationSignals: ["source_distortion"],
       antisemitism: { assessment: "not_detected", categories: [], explanation: NOT_ANTISEMITIC_NO_REFERENCE },
     },
     claims: [
@@ -215,6 +216,7 @@ const antisemiticClaim: Fixture = {
         "The post presents the 'Jewish control of the media' conspiracy myth as an ownership fact. The checkable part is false: the largest US media companies are publicly traded corporations owned by many institutional and individual shareholders, with executives of many backgrounds. Attributing collective control of the media to Jews in order to explain why 'the truth' is hidden matches the IHRA working definition's example of the myth of a Jewish conspiracy controlling the media.",
       confidence: "high",
       disinformationScore: 82,
+      manipulationSignals: ["narrative_distortion"],
       antisemitism: antisemitismOf(
         "likely",
         ["conspiracy_or_control"],
@@ -558,6 +560,7 @@ const noEngageNoteRecommended: Fixture = {
         "The post's central factual claim, that the Rothschild family owns the Federal Reserve and all central banks, is false: the Federal Reserve's Board of Governors is a US federal agency and the regional Reserve Banks are owned by member banks under statutory rules, not by any family, and most central banks are state institutions. The claim is embedded in the Rothschild conspiracy myth and the triple-parentheses marker '(((them)))', which attribute control of world finance to Jews and blame them for economic hardship, a trope listed in the IHRA working definition. The economic grievances (rent, savings) are real concerns attached to a fabricated cause.",
       confidence: "high",
       disinformationScore: 90,
+      manipulationSignals: ["narrative_distortion"],
       antisemitism: antisemitismOf(
         "likely",
         ["conspiracy_or_control", "collective_blame"],
@@ -767,6 +770,7 @@ const misleadingFraming: Fixture = {
         "The specific comparison is accurate: 2016, boosted by a strong El Niño, was warmer than 2018 in the NASA and NOAA records. But presenting a two-year dip as evidence against global warming is cherry-picking: the long-term trend is strongly upward, 2018 was itself among the warmest years on record, and year-to-year variation from El Niño and La Niña is expected. The numbers are right; the conclusion drawn from them is misleading.",
       confidence: "high",
       disinformationScore: 62,
+      manipulationSignals: ["selective_framing", "material_omission"],
       antisemitism: { assessment: "not_detected", categories: [], explanation: NOT_ANTISEMITIC_NO_REFERENCE },
     },
     claims: [

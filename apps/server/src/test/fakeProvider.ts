@@ -15,6 +15,7 @@ export const DEFAULT_OUTPUTS: Record<string, unknown> = {
     explanation: "The post states a false fact.",
     confidence: "high",
     disinformationScore: 80,
+    manipulationSignals: ["source_distortion"],
     antisemitism: { assessment: "not_detected", patterns: [], explanation: "No reference to Jews.", needsIhraReview: false },
   },
   assessIhra: {

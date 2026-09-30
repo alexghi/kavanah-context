@@ -52,7 +52,7 @@ docs/             this file, plus notes
 PostContext
   ├─ stage 1  extractClaims      (structured)   claims + types + check-worthiness
   ├─ stage 2  classifyContent    (structured)   labels, antisemitism assessment (IHRA categories),
-  │                                              disinformation score, confidence            [runs in parallel with 1]
+  │                                              manipulation signals and score, confidence  [runs in parallel with 1]
   ├─ stage 3  retrieveEvidence   (web_search)   candidate sources for check-worthy claims (skipped if none)
   ├─ stage 4  assessEvidence     (structured)   per-claim verdict; sources chosen by id from stage 3 only
   ├─ stage 5a recommendEngagement(structured)   engage / do_not_engage / uncertain + rationale   ┐ parallel,
@@ -60,7 +60,7 @@ PostContext
   └─ stage 6  drafts             (structured)   on demand: reply or Community Note
 ```
 
-The disinformation score is an indicative AI assessment (0-100) and is shown separately
+The manipulation score (`disinformationScore` in the API) is an indicative AI assessment (0-100) and is shown separately
 from confidence. The UI never presents it as "% false".
 
 ## Safety rules enforced in code, not just prompts

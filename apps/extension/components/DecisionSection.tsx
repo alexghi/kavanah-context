@@ -7,7 +7,7 @@ import { Card } from "./ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 
 export interface DecisionSectionProps {
-  /** Short section name shown above the verdict: "Disinfo", "Engage", "Note". */
+  /** Section name shown above the verdict: "Content & manipulation assessment", "Engage", "Note". */
   label: string;
   verdict: DecisionVerdict;
   status: RecommendationStatus;

@@ -31,11 +31,14 @@ describe("decision verdicts", () => {
   const evidence = makeAnalysis().evidence;
   const withVerdict = (verdict: (typeof evidence)[number]["verdict"]) => evidence.map((item) => ({ ...item, verdict }));
 
-  it("turns the classification into a one-glance disinformation verdict", () => {
-    expect(disinfoVerdict(classify(90, ["misinformation"]), evidence)).toEqual({ label: "Likely misleading", tone: "critical" });
+  it("turns the classification into a one-glance factual verdict", () => {
+    expect(disinfoVerdict(classify(90, ["misinformation"]), evidence)).toEqual({ label: "False", tone: "critical" });
+    expect(disinfoVerdict(classify(80, ["factual_claim", "misleading_framing"]), evidence)).toEqual({ label: "Missing context", tone: "critical" });
     expect(disinfoVerdict(classify(62, ["factual_claim", "misleading_framing"]), evidence)).toEqual({ label: "Missing context", tone: "warning" });
-    expect(disinfoVerdict(classify(62, ["misinformation", "misleading_framing"]), evidence).label).toBe("Potentially misleading");
-    expect(disinfoVerdict(classify(30, ["unverifiable_claim"]), evidence).label).toBe("Some concerns");
+    expect(disinfoVerdict(classify(62, ["misinformation", "misleading_framing"]), evidence)).toEqual({ label: "Misleading", tone: "warning" });
+    expect(disinfoVerdict(classify(40, ["factual_claim"]), evidence)).toEqual({ label: "Misleading", tone: "caution" });
+    expect(disinfoVerdict(classify(30, ["unverifiable_claim"]), evidence)).toEqual({ label: "Unverifiable", tone: "caution" });
+    expect(disinfoVerdict(classify(0, ["unverifiable_claim"]), [])).toEqual({ label: "Unverifiable", tone: "neutral" });
     expect(disinfoVerdict(classify(5, ["opinion"]), [])).toEqual({ label: "Opinion", tone: "neutral" });
     expect(disinfoVerdict(classify(2, ["factual_claim", "benign"]), withVerdict("supported"))).toEqual({ label: "Accurate", tone: "positive" });
     // Nothing was checked, so "accurate" would overclaim.

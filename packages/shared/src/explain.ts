@@ -7,6 +7,7 @@ import type {
   ContentLabel,
   EvidenceVerdict,
   IhraPattern,
+  ManipulationSignal,
   StatementBasis,
 } from "./schemas";
 
@@ -133,6 +134,55 @@ export function groupLabels(labels: readonly ContentLabel[]): { findings: Groupe
 }
 
 // ---------------------------------------------------------------------------
+// Manipulation signals
+// ---------------------------------------------------------------------------
+
+/** Techniques by which a post may mislead. Shown on their own line, apart from the factual verdict. */
+export const MANIPULATION_SIGNALS: Record<ManipulationSignal, { label: string; definition: string }> = {
+  selective_framing: {
+    label: "Selective framing",
+    definition: "Picks the facts, dates or comparisons that fit one conclusion and presents them as the whole picture.",
+  },
+  material_omission: {
+    label: "Material omission",
+    definition: "Leaves out a fact that would change how a reader understands the claim.",
+  },
+  semantic_manipulation: {
+    label: "Semantic manipulation",
+    definition: "Uses loaded, redefined or ambiguous words so that a claim means more than the facts support.",
+  },
+  false_equivalence: {
+    label: "False equivalence",
+    definition: "Treats two things as the same while ignoring differences in scale, aims, methods or context.",
+  },
+  decontextualization: {
+    label: "Decontextualization",
+    definition: "Takes a quote, image, figure or event out of the time, place or circumstances that give it its meaning.",
+  },
+  narrative_distortion: {
+    label: "Narrative distortion",
+    definition: "Arranges events into a story of cause, intent or blame that the facts do not establish.",
+  },
+  source_distortion: {
+    label: "Source distortion",
+    definition: "Misrepresents what a source says or how reliable it is, or cites a source that is unnamed or does not exist.",
+  },
+};
+
+export const MANIPULATION_SIGNAL_ORDER: ManipulationSignal[] = [
+  "selective_framing",
+  "material_omission",
+  "semantic_manipulation",
+  "false_equivalence",
+  "decontextualization",
+  "narrative_distortion",
+  "source_distortion",
+];
+
+export const MANIPULATION_SIGNALS_EXPLAINER =
+  "How the post may mislead, separately from whether its facts are right: a post can be accurate and still carry a signal.";
+
+// ---------------------------------------------------------------------------
 // Antisemitism
 // ---------------------------------------------------------------------------
 
@@ -195,7 +245,7 @@ export const ANTISEMITISM_EXCLUSIONS =
   "Criticism of Israel like that levelled against any other country is not antisemitic, and neither is quoting antisemitism to condemn or document it.";
 
 export const ANTISEMITISM_NOT_FALSE =
-  "Antisemitic is not the same as false: a slur with no factual claim is antisemitic, but it is not misinformation and gets a low disinformation score.";
+  "Antisemitic is not the same as false: a slur with no factual claim is antisemitic, but it is not misinformation and gets a low manipulation score.";
 
 // ---------------------------------------------------------------------------
 // IHRA framework: patterns, analogy mechanisms, comparison
