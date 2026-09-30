@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
-import { CircleHelp, LoaderCircle, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { CircleHelp, RefreshCw, Settings as SettingsIcon, TriangleAlert, X as XIcon } from "lucide-react";
 import type { AnalysisMeta, DraftKind, PostContext } from "@kavannah/shared";
 import { useAnalysis } from "@/hooks/useAnalysis";
 import type { AnalysisClient } from "@/lib/api";
@@ -12,34 +12,10 @@ import { AssessmentCard, viewOfAnalysis, viewOfProgress } from "./AssessmentCard
 import { CommunityNoteCard, type NoteRequestState } from "./CommunityNoteCard";
 import { EngageCard } from "./EngageCard";
 import { PostPreview } from "./PostPreview";
-import { StageProgress } from "./StageProgress";
+import { ProgressStrip } from "./StageProgress";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import { Card, CardHeader } from "./ui/card";
-import { Skeleton } from "./ui/skeleton";
-import { SectionLabel } from "./SectionLabel";
-
-/** Stands in for a recommendation card until the analysis is complete. */
-function RecommendationPending({ label, text }: { label: string; text: string }) {
-  return (
-    <Card aria-busy="true">
-      <CardHeader className="gap-2 px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <Skeleton className="size-8 rounded-full" />
-          <div className="flex-1 space-y-1.5">
-            <SectionLabel>{label}</SectionLabel>
-            <Skeleton className="h-4 w-2/5" />
-          </div>
-        </div>
-        <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
-          <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-          {text}
-        </p>
-      </CardHeader>
-    </Card>
-  );
-}
 
 /** The note draft for X's request form: the text, or a promise of it while it is being written (`null` = drafting failed). */
 export type NoteExplanation = string | Promise<string | null>;
@@ -189,6 +165,15 @@ export function KavannahPanel({
   const mode = state.status === "result" ? state.analysis.meta.mode : demo ? "mock" : null;
   const showsCurrent = post !== null && state.post?.url === post.url;
   const hasResult = post !== null && showsCurrent && state.status === "result";
+  // One tree for the whole life of an analysis: the same cards fill in place, nothing is re-mounted.
+  const analysis = hasResult && state.status === "result" ? state.analysis : null;
+  const inFlight = post !== null && (!showsCurrent || state.status === "idle" || state.status === "loading");
+  const progress = showsCurrent && state.status === "loading" ? state.progress : undefined;
+  const view = analysis ? viewOfAnalysis(analysis) : progress ? viewOfProgress(progress) : null;
+  const openedAt = useMemo(() => Date.now(), [postUrl]);
+  const startedAt = showsCurrent && state.status === "loading" ? state.startedAt : showsCurrent && state.status === "result" ? state.receivedAt - state.analysis.meta.durationMs : openedAt;
+  const pendingText = progress?.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…";
+  const idleDrafts = { status: "idle" } as const;
 
   /** Header help button: open "How to read this analysis" and bring it into view. */
   const showGuide = () => {
@@ -283,30 +268,10 @@ export function KavannahPanel({
           </p>
         )}
 
-        {post && (!showsCurrent || state.status === "idle") && (
-          <div className="flex items-center gap-2 px-4 py-6 text-[13px] text-muted-foreground" role="status">
-            <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
+        {post && !showsCurrent && (
+          <span className="sr-only-text" role="status">
             Starting analysis…
-          </div>
-        )}
-
-        {post && showsCurrent && state.status === "loading" && !(state.progress && viewOfProgress(state.progress)) && (
-          <StageProgress startedAt={state.startedAt} mode={demo ? "mock" : null} phase={state.progress?.phase} ihraPending={state.progress?.ihraPending} />
-        )}
-
-        {post && showsCurrent && state.status === "loading" && state.progress && viewOfProgress(state.progress) && (
-          <div className="space-y-3 p-4">
-            <StageProgress compact startedAt={state.startedAt} mode={demo ? "mock" : null} phase={state.progress.phase} ihraPending={state.progress.ihraPending} />
-            <AssessmentCard view={viewOfProgress(state.progress)!} {...disinfoSection} />
-            <RecommendationPending
-              label="Engage"
-              text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
-            />
-            <RecommendationPending
-              label="Note"
-              text={state.progress.ihraPending ? "Deciding once the IHRA review is in…" : "Deciding once the evidence is in…"}
-            />
-          </div>
+          </span>
         )}
 
         {post && showsCurrent && state.status === "error" && (
@@ -330,12 +295,21 @@ export function KavannahPanel({
           </div>
         )}
 
-        {hasResult && state.status === "result" && (
-          <div className="space-y-3 p-4">
-            <AssessmentCard view={viewOfAnalysis(state.analysis)} {...disinfoSection} />
+        {post && (inFlight || analysis) && (
+          <div className="p-4">
+            <ProgressStrip
+              startedAt={startedAt}
+              finishedAt={analysis && state.status === "result" ? state.receivedAt : undefined}
+              mode={demo ? "mock" : null}
+              phase={progress?.phase}
+              ihraPending={progress?.ihraPending ?? false}
+            />
+            <div className="space-y-3">
+            <AssessmentCard view={view} {...disinfoSection} />
             <EngageCard
-              engagement={state.analysis.engagement}
-              draft={state.drafts.reply}
+              engagement={analysis?.engagement ?? null}
+              pendingText={pendingText}
+              draft={state.status === "result" ? state.drafts.reply : idleDrafts}
               open={openSections.engage}
               onOpenChange={(sectionOpen) => handleSectionChange("engage", sectionOpen)}
               onPrepare={() => void generateDraft("reply")}
@@ -346,8 +320,9 @@ export function KavannahPanel({
               onCloseDraft={() => closeDraft("reply")}
             />
             <CommunityNoteCard
-              communityNote={state.analysis.communityNote}
-              draft={state.drafts.community_note}
+              communityNote={analysis?.communityNote ?? null}
+              pendingText={pendingText}
+              draft={state.status === "result" ? state.drafts.community_note : idleDrafts}
               request={noteRequest}
               open={openSections.note}
               onOpenChange={(sectionOpen) => handleSectionChange("note", sectionOpen)}
@@ -359,8 +334,13 @@ export function KavannahPanel({
               onResetDraft={() => resetDraft("community_note")}
               onCloseDraft={() => closeDraft("community_note")}
             />
-            <AnalysisGuide open={guideOpen} onOpenChange={setGuideOpen} containerRef={guideRef} />
-            <p className="pb-1 text-center text-[12px] text-muted-foreground">{footerText(state.analysis.meta)}</p>
+            {analysis && (
+              <div className="kavannah-settle space-y-3">
+                <AnalysisGuide open={guideOpen} onOpenChange={setGuideOpen} containerRef={guideRef} />
+                <p className="pb-1 text-center text-[12px] text-muted-foreground">{footerText(analysis.meta)}</p>
+              </div>
+            )}
+            </div>
           </div>
         )}
       </div>

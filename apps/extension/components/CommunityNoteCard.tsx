@@ -8,12 +8,13 @@ import {
   type CommunityNote,
 } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
+import { useArrival } from "@/hooks/useArrival";
 import type { CommunityNoteMenuStatus } from "@/lib/x/communityNoteMenu";
 import { cn } from "@/lib/utils";
 import { noteVerdict } from "@/lib/decisions";
 import { DecisionSection } from "./DecisionSection";
 import { DraftEditor } from "./DraftEditor";
-import { NOTE_STATUS } from "./RecommendationStatus";
+import { NOTE_STATUS, RecommendationSkeleton } from "./RecommendationStatus";
 import { GroupTitle } from "./SubSection";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Button } from "./ui/button";
@@ -26,7 +27,9 @@ export type NoteRequestState =
   | CommunityNoteMenuStatus;
 
 export interface CommunityNoteCardProps {
-  communityNote: CommunityNote;
+  /** null while the analysis is still running: the card keeps its place with a placeholder. */
+  communityNote: CommunityNote | null;
+  pendingText?: string;
   draft: DraftState;
   request: NoteRequestState;
   open: boolean;
@@ -106,6 +109,7 @@ function RequestFeedback({ request }: { request: NoteRequestState }) {
 
 export function CommunityNoteCard({
   communityNote,
+  pendingText,
   draft,
   request,
   open,
@@ -119,6 +123,8 @@ export function CommunityNoteCard({
   onCloseDraft,
 }: CommunityNoteCardProps) {
   const [guideOpen, setGuideOpen] = useState(false);
+  const arrived = useArrival(communityNote !== null);
+  if (!communityNote) return <RecommendationSkeleton label="Note" text={pendingText ?? "Deciding once the evidence is in…"} />;
   const recommendation = communityNote.recommendation;
   const copy = COMMUNITY_NOTE_COPY[recommendation];
   const working = request.status === "working";
@@ -130,6 +136,7 @@ export function CommunityNoteCard({
       status={NOTE_STATUS[recommendation]}
       open={open}
       onOpenChange={onOpenChange}
+      className={cn(arrived && "kavannah-breathe")}
     >
       <div className="space-y-3 p-4">
         <p className="text-[12.5px] leading-5 text-muted-foreground">{copy.description}</p>

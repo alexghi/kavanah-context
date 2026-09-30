@@ -16,6 +16,15 @@ export const DEFAULT_OUTPUTS: Record<string, unknown> = {
     confidence: "high",
     disinformationScore: 80,
     antisemitism: { assessment: "not_detected", patterns: [], explanation: "No reference to Jews.", needsIhraReview: false },
+    manipulation: {
+      level: "present",
+      summary: "A confident false claim with no source.",
+      findings: [
+        { technique: "False Authority", trigger: "The Moon is made of cheese.", explanation: "Stated as settled fact without any source.", confidence: "HIGH" },
+        { technique: "not_a_technique", trigger: "x", explanation: "y", confidence: "low" },
+        { technique: "false_authority", trigger: "duplicate", explanation: "dropped as a duplicate", confidence: "low" },
+      ],
+    },
   },
   assessIhra: {
     assessment: "likely",

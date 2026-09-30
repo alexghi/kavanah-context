@@ -1,15 +1,19 @@
 import { MessageSquare } from "lucide-react";
 import { ENGAGEMENT_COPY, type Engagement } from "@kavannah/shared";
 import type { DraftState } from "@/hooks/useAnalysis";
+import { useArrival } from "@/hooks/useArrival";
 import { engageVerdict } from "@/lib/decisions";
+import { cn } from "@/lib/utils";
 import { DecisionSection } from "./DecisionSection";
 import { DraftEditor } from "./DraftEditor";
-import { ENGAGE_STATUS } from "./RecommendationStatus";
+import { ENGAGE_STATUS, RecommendationSkeleton } from "./RecommendationStatus";
 import { GroupTitle } from "./SubSection";
 import { Button } from "./ui/button";
 
 export interface EngageCardProps {
-  engagement: Engagement;
+  /** null while the analysis is still running: the card keeps its place with a placeholder. */
+  engagement: Engagement | null;
+  pendingText?: string;
   draft: DraftState;
   open: boolean;
   onOpenChange(open: boolean): void;
@@ -23,6 +27,7 @@ export interface EngageCardProps {
 
 export function EngageCard({
   engagement,
+  pendingText,
   draft,
   open,
   onOpenChange,
@@ -33,6 +38,8 @@ export function EngageCard({
   onResetDraft,
   onCloseDraft,
 }: EngageCardProps) {
+  const arrived = useArrival(engagement !== null);
+  if (!engagement) return <RecommendationSkeleton label="Engage" text={pendingText ?? "Deciding once the evidence is in…"} />;
   const recommendation = engagement.recommendation;
   const copy = ENGAGEMENT_COPY[recommendation];
 
@@ -43,6 +50,7 @@ export function EngageCard({
       status={ENGAGE_STATUS[recommendation]}
       open={open}
       onOpenChange={onOpenChange}
+      className={cn(arrived && "kavannah-breathe")}
     >
       <div className="space-y-3 p-4">
         <p className="text-[12.5px] leading-5 text-muted-foreground">{copy.description}</p>

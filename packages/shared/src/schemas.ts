@@ -145,6 +145,51 @@ export const AntisemitismAssessmentSchema = z.object({
 });
 export type AntisemitismAssessment = z.infer<typeof AntisemitismAssessmentSchema>;
 
+// ---------------------------------------------------------------------------
+// Information manipulation: how the post persuades, separate from whether it is true
+// ---------------------------------------------------------------------------
+
+/** Techniques the classifier can name. Definitions and groups: explain.ts (MANIPULATION_TECHNIQUES). */
+export const ManipulationTechniqueSchema = z.enum([
+  "emotional_appeal",
+  "loaded_language",
+  "urgency_or_call_to_action",
+  "bait_or_dog_whistle",
+  "cherry_picking",
+  "misleading_statistics",
+  "out_of_context",
+  "fabricated_or_misattributed",
+  "false_authority",
+  "false_dilemma",
+  "false_equivalence",
+  "strawman",
+  "whataboutism",
+  "scapegoating",
+  "conspiracy_framing",
+]);
+export type ManipulationTechnique = z.infer<typeof ManipulationTechniqueSchema>;
+
+/** none = no technique found; present = techniques used but the post would stand without them; central = the post relies on them. */
+export const ManipulationLevelSchema = z.enum(["none", "present", "central"]);
+export type ManipulationLevel = z.infer<typeof ManipulationLevelSchema>;
+
+export const ManipulationFindingSchema = z.object({
+  technique: ManipulationTechniqueSchema,
+  /** The exact words of the post that carry the technique (quoted, never paraphrased into something the post did not say) */
+  trigger: z.string(),
+  /** What it does to the reader and what it hides */
+  explanation: z.string(),
+  confidence: ConfidenceSchema,
+});
+export type ManipulationFinding = z.infer<typeof ManipulationFindingSchema>;
+
+export const ManipulationSchema = z.object({
+  level: ManipulationLevelSchema,
+  summary: z.string(),
+  findings: z.array(ManipulationFindingSchema),
+});
+export type Manipulation = z.infer<typeof ManipulationSchema>;
+
 export const ClassificationSchema = z.object({
   /** Short human headline, e.g. "Potentially misleading", "No clear factual issue identified" */
   headline: z.string(),
@@ -159,6 +204,8 @@ export const ClassificationSchema = z.object({
    */
   disinformationScore: z.number().int().min(0).max(100),
   antisemitism: AntisemitismAssessmentSchema,
+  /** Manipulation techniques the post uses. Absent on results from servers that predate this layer. */
+  manipulation: ManipulationSchema.optional(),
 });
 export type Classification = z.infer<typeof ClassificationSchema>;
 

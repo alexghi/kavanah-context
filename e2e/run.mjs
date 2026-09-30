@@ -990,13 +990,16 @@ async function main() {
       };
       const audit = (target, pg) => pg.evaluate(`(${CONTRAST_AUDIT_IN_PAGE})(${JSON.stringify(target)})`);
       const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, (m) => `\\${m}`);
+      // Contrast is judged on the settled page: with reduced motion the panel's fade-ins are off,
+      // so no text is measured half-transparent in the middle of an animation.
+      const reducedMotion = "reduce";
 
       // Popup: every demo analysis, fully expanded, in both colour schemes.
       const popup = await context.newPage();
       attachConsole(popup, "popup");
       await popup.setViewportSize({ width: 400, height: 600 });
       for (const scheme of ["light", "dark"]) {
-        await popup.emulateMedia({ colorScheme: scheme });
+        await popup.emulateMedia({ colorScheme: scheme, reducedMotion });
         await popup.goto(`chrome-extension://${extId}/popup.html`);
         await popup.getByRole("list", { name: "Demo posts" }).getByRole("listitem").first().waitFor({ timeout: T.medium });
         record("popup: demo picker", scheme, await audit("document", popup));
@@ -1016,7 +1019,7 @@ async function main() {
       const settingsPage = await context.newPage();
       attachConsole(settingsPage, "options");
       for (const scheme of ["light", "dark"]) {
-        await settingsPage.emulateMedia({ colorScheme: scheme });
+        await settingsPage.emulateMedia({ colorScheme: scheme, reducedMotion });
         await settingsPage.goto(`chrome-extension://${extId}/options.html`);
         await settingsPage.getByRole("button", { name: "Test connection" }).click();
         await settingsPage.getByText(/Connected\./).waitFor({ timeout: T.medium });
@@ -1026,6 +1029,7 @@ async function main() {
 
       // The in-page drawer follows X's theme through data-theme: check it on a dark and a light X page.
       await page.bringToFront();
+      await page.emulateMedia({ reducedMotion });
       for (const hostTheme of ["dark", "light"]) {
         if (await isPanelOpen()) {
           await page.keyboard.press("Escape");
@@ -1038,6 +1042,7 @@ async function main() {
         record(`drawer on ${hostTheme} X`, (await panelState()).theme, await audit("drawer", page));
       }
       await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+      await page.emulateMedia({ reducedMotion: null });
 
       const checked = audits.reduce((sum, a) => sum + a.checked, 0);
       const minRatio = Math.min(...audits.map((a) => a.minRatio ?? Infinity));

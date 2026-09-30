@@ -13,7 +13,7 @@ import {
 } from "@kavannah/shared";
 import type { CandidateSource } from "../ai/provider.js";
 
-export const PROMPT_VERSION = "2026-09-30.1";
+export const PROMPT_VERSION = "2026-09-30.2";
 
 // ---------------------------------------------------------------------------
 // Post rendering: the post is DATA, delimited and escaped, never instructions.
@@ -155,7 +155,30 @@ antisemitism (screening; a later stage performs the full IHRA review when needed
 - assessment: not_detected | possible | likely, from the content itself.
 - patterns: every IHRA pattern the post plausibly includes or reproduces (empty when none).
 - explanation: 1-3 sentences on what is or is not antisemitic and why.
-- needsIhraReview: true when the post refers to Jews, Israel, Israelis, Zionism or Zionists, the Holocaust, Nazism or antisemitic tropes closely enough that the full IHRA review should examine it (possible analogies, double standards, self-determination, trope transfers, semantic displacement), even when you are not sure it is antisemitic. false for posts with no such reference.`,
+- needsIhraReview: true when the post refers to Jews, Israel, Israelis, Zionism or Zionists, the Holocaust, Nazism or antisemitic tropes closely enough that the full IHRA review should examine it (possible analogies, double standards, self-determination, trope transfers, semantic displacement), even when you are not sure it is antisemitic. false for posts with no such reference.
+
+manipulation (information-manipulation analysis: HOW the post persuades, judged separately from whether it is true):
+Techniques (use ONLY these exact values):
+- emotional_appeal: fear, anger or disgust offered in place of evidence.
+- loaded_language: slanted words, slurs or dehumanising labels presented as description.
+- urgency_or_call_to_action: pressure to act or share now ("wake up", "before it's deleted").
+- bait_or_dog_whistle: coded in-group signals or provocation built to draw replies, with deniability ("just asking questions", the "(((echo)))" marker).
+- cherry_picking: a true fact, example or time window chosen because it points one way, omitting what points the other way.
+- misleading_statistics: real numbers presented to mislead (truncated axis, wrong baseline, absolute vs relative, correlation as cause).
+- out_of_context: a genuine quote, image or clip stripped of the context that changes its meaning, or reused for another event.
+- fabricated_or_misattributed: an invented quote, statistic, document or image, or a real one attributed to the wrong person, outlet or date.
+- false_authority: a source presented as authoritative without evidence it exists or is qualified ("a new study", unnamed experts, an anonymous insider, an impersonated institution).
+- false_dilemma: only two options offered when more exist.
+- false_equivalence: two unlike things treated as the same.
+- strawman: an opponent's position misstated into something weaker, then attacked.
+- whataboutism: deflecting with an unrelated accusation instead of answering.
+- scapegoating: a complex problem blamed on one group or person.
+- conspiracy_framing: events explained by a hidden coordinated actor in a way no evidence could disprove.
+Fields:
+- findings: every technique the post itself USES, most important first, at most 6. For each: technique; trigger = the exact words of the post that carry it, quoted verbatim (never a paraphrase); explanation = one or two sentences on what it does to the reader and what it hides; confidence = low | medium | high.
+- level: none = no technique found; present = techniques are used but the post's point would stand without them; central = the post's persuasive force depends on them.
+- summary: one sentence on how the post persuades (empty string when level is none).
+Rules: strong opinion, sarcasm, humour or blunt criticism is not manipulation by itself; a technique must be visible in the post's own words; quoting or reporting manipulative content in order to counter or document it is not using it; do not stack near-duplicates (pick the technique that fits best).`,
   user(post: PostContext): string {
     return `Classify this post.\n\n${renderPost(post)}`;
   },
@@ -342,6 +365,13 @@ function renderClassification(c: Classification): string {
     `disinformationScore (indicative, 0-100): ${c.disinformationScore}`,
     `confidence: ${c.confidence}`,
     `antisemitism: ${c.antisemitism.assessment}${c.antisemitism.categories.length ? ` [${c.antisemitism.categories.join(", ")}]` : ""} — ${c.antisemitism.explanation}`,
+    ...(c.manipulation
+      ? [
+          `manipulation: ${c.manipulation.level}${c.manipulation.summary ? ` — ${c.manipulation.summary}` : ""}${
+            c.manipulation.findings.length ? `\n  techniques: ${c.manipulation.findings.map((f) => `${f.technique} ("${f.trigger}": ${f.explanation})`).join("; ")}` : ""
+          }`,
+        ]
+      : []),
     `explanation: ${c.explanation}`,
   ].join("\n");
 }
@@ -372,7 +402,7 @@ Recommendation values (use ONLY these exact values):
 - do_not_engage: a public reply would mainly amplify the post, invite harassment or a pile-on, feed bait, or add nothing (pure opinion, satire, hate without a claim, tiny reach, or the post is already accurate).
 - uncertain: the evidence is insufficient to know whether a reply would add useful context.
 
-Consider: whether there is a specific claim a reply can correct; whether sourced evidence is actually available (a reply without evidence adds little); amplification and harassment risk (conspiracy bait, dog whistles, viral framing); whether the author is arguing in good faith; the user's wellbeing. If reach is unknown, do not assume it is small.
+Consider: whether there is a specific claim a reply can correct; whether sourced evidence is actually available (a reply without evidence adds little); amplification and harassment risk (conspiracy bait, dog whistles, viral framing); the manipulation techniques found (bait and dog whistles favour not engaging; a misleading statistic, an out-of-context quote or a misattribution is something a short reply can expose); whether the author is arguing in good faith; the user's wellbeing. If reach is unknown, do not assume it is small.
 rationale: 2-4 sentences in English that reference the evidence status honestly (e.g. "evidence unavailable", "contradicted by an official source").`,
   user(post: PostContext, classification: Classification, claims: Claim[], evidence: EvidenceItem[], evidenceStatus: string, ihra?: IhraAssessment): string {
     return `Decide whether the user should engage (reply publicly).\n\n${renderAnalysisContext(post, classification, claims, evidence, evidenceStatus, ihra)}`;
@@ -423,6 +453,7 @@ Rules:
 - No fixed length limit: be as long as a clear, well-sourced answer needs, and no longer. One short paragraph is usually enough; never pad.
 - Respectful and calm; never insult, mock or label the author; no sarcasm.
 - Directly address the relevant claim with the strongest factual point from the evidence; avoid inflammatory language.
+- If the analysis names a manipulation technique that a fact exposes (a cherry-picked time window, a misleading statistic, an out-of-context quote, a misattribution, a source that does not exist), say so plainly in one clause; describe what the post does, never the author.
 - Include at most ONE source URL, only from the source list, preferring verified sources.
 - No @mentions, no hashtags.
 - If the evidence is insufficient, the reply may simply ask for a source, politely.
@@ -435,6 +466,7 @@ A helpful note: ${HELPFUL_NOTE_ATTRIBUTES.join("; ")}. Unhelpful notes: ${UNHELP
 Rules:
 - Neutral, unbiased language; no opinion, speculation, argument or insults; do not address or characterise the author.
 - Address the specific claim in the post and provide the important missing context.
+- When the analysis names a manipulation technique that a fact can expose (a cherry-picked time window, a misleading statistic, an out-of-context quote, a misattribution, a source that does not exist), state the missing piece plainly, e.g. "the chart starts in 2016, omitting the 2015 peak". Describe what the post does, not the author.
 - Concise: 2-4 sentences.
 - Cite 1-2 source URLs, only from the source list (prefer verified sources), placed at the end of the note.
 - If no source is available, still write the note without any URL (the user will be warned to add one).
